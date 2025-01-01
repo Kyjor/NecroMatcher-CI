@@ -2,8 +2,6 @@ name: CI
 
 on:
   push:
-  # pull_request:
-# Mac OS gets charged at a rate of 1 minute = 10 minutes, so for now we're excluding it
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
@@ -74,6 +72,9 @@ jobs:
       - name: Copy Launch Script to Build (Windows)
         if: matrix.os == 'windows-latest'
         run: copy Battler\LaunchNecroMatcher.vbs Build\LaunchNecroMatcher.vbs
+      - name: Zip Build Folder (Mac)
+        if: matrix.os == 'macOS-latest'
+        run: zip -r Build.zip Build
       - name: Upload Artifact (Linux)
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
