@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+  # pull_request:
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1'
+          - '1.9' # Specific for macOS
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+        exclude:
+         - version: '1.9'
+           os: ubuntu-latest
+         - version: '1.9'
+           os: windows-latest
+         - version: '1'
+           os: macOS-latest
+        arch:
+          - x64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
+          repository: Kyjor/gmtk-2024
+
+      - name: Verify directory exists
+        run: |
+          if [ -d "gmtk-2024" ] || [ -d "gmtk-2024" ]; then
+            echo "Directory exists."
+          else
+            echo "Directory does not exist."
+            exit 1
+          fi
+        shell: bash
+
+    #   - uses: actions/checkout@v2
+    #   - name: Setup Ubuntu Display (if applicable)
+    #     run: sudo apt-get install xvfb && Xvfb :99 &
+    #     if: matrix.os == 'ubuntu-latest'
+    #   - name: Setup Julia
+    #     uses: julia-actions/setup-julia@v1
+    #     with:
+    #       version: ${{ matrix.version }}
+    #       arch: ${{ matrix.arch }}
+    #   - name: Add JulGame.jl Dependency
+    #     working-directory: ./Battler
+    #     run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop"))'
+    #   - name: Build Julia Package
+    #     working-directory: ./Battler
+    #     run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
+    #   - name: Run Tests
+    #     working-directory: ./Battler
+    #     run: julia -e 'using Pkg; Pkg.activate("."); Pkg.test()'
+    #   - name: Copy Assets on Linux
+    #     if: matrix.os == 'ubuntu-latest'
+    #     run: |
+    #       cp -r ./Battler/assets ./Build
+    # #   - name: Copy Assets on macOS
+    # #     if: matrix.os == 'macOS-latest'
+    # #     run: |
+    # #       cp -r ./Battler/assets ./Build
+    #   - name: Copy Assets on Windows
+    #     if: matrix.os == 'windows-latest'
+    #     run: |
+    #       xcopy /E /I Battler\assets Build\assets
+    #   - name: Copy Config File to Build (Linux)
+    #     if: matrix.os == 'ubuntu-latest'
+    #     run: cp ./Battler/config.julgame ./Build
+    # #   - name: Copy Config File to Build (Mac)
+    # #     if: matrix.os == 'macOS-latest'
+    # #     run: cp ./Battler/config.julgame ./Build
+    #   - name: Copy Config File to Build (Windows)
+    #     if: matrix.os == 'windows-latest'
+    #     run: copy Battler\config.julgame Build\config.julgame
+    #   - name: Copy Launch Script to Build (Windows)
+    #     if: matrix.os == 'windows-latest'
+    #     run: copy Battler\LaunchNecroMatcher.vbs Build\LaunchNecroMatcher.vbs
+    #   - name: Upload Artifact (Linux)
+    #     if: matrix.os == 'ubuntu-latest'
+    #     uses: actions/upload-artifact@v4
+    #     with:
+    #         name: NecroMatcher-Linux
+    #         path: ./Build
+    # #   - name: Upload Artifact (Mac)
+    # #     if: matrix.os == 'macOS-latest'
+    # #     uses: actions/upload-artifact@v4
+    # #     with:
+    # #         name: NecroMatcher-Mac
+    # #         path: ./Build
+    #   - name: Upload Artifact (Windows)
+    #     if: matrix.os == 'windows-latest' && github.ref_name == 'main'
+    #     uses: actions/upload-artifact@v4
+    #     with:
+    #         name: NecroMatcher-Windows
+    #         path: ./Build
