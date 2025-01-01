@@ -33,23 +33,14 @@ jobs:
         with:
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           repository: Kyjor/gmtk-2024
-
-      - name: Print directory contents
-        run: |
-          echo "Contents of the current directory:"
-          ls -la
-        shell: bash
-
-
-    #   - uses: actions/checkout@v2
-    #   - name: Setup Ubuntu Display (if applicable)
-    #     run: sudo apt-get install xvfb && Xvfb :99 &
-    #     if: matrix.os == 'ubuntu-latest'
-    #   - name: Setup Julia
-    #     uses: julia-actions/setup-julia@v1
-    #     with:
-    #       version: ${{ matrix.version }}
-    #       arch: ${{ matrix.arch }}
+      - name: Setup Ubuntu Display (if applicable)
+        run: sudo apt-get install xvfb && Xvfb :99 &
+        if: matrix.os == 'ubuntu-latest'
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v1
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
     #   - name: Add JulGame.jl Dependency
     #     working-directory: ./Battler
     #     run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop"))'
