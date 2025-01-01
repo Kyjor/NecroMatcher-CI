@@ -93,3 +93,36 @@ jobs:
         with:
             name: NecroMatcher-Windows
             path: ./Build
+      - name: Deploy to Steam (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1410040
+          buildDescription: v0.1.0
+          rootPath: NecroMatcher-CI
+          depot1Path: Build
+          releaseBranch: testing
+      - name: Deploy to Steam (Mac)
+        if: matrix.os == 'macOS-latest'
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1410040
+          buildDescription: v0.1.0
+          rootPath: NecroMatcher-CI
+          depot1Path: Build.zip
+          releaseBranch: testing
+      - name: Deploy to Steam (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1410040
+          buildDescription: v0.1.0
+          rootPath: NecroMatcher-CI
+          depot1Path: Build
+          releaseBranch: testing
