@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   # pull_request:
+# Mac OS gets charged at a rate of 1 minute = 10 minutes, so for now we're excluding it
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
@@ -33,15 +34,12 @@ jobs:
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           repository: Kyjor/gmtk-2024
 
-      - name: Verify directory exists
+      - name: Print directory contents
         run: |
-          if [ -d "gmtk-2024" ] || [ -d "gmtk-2024" ]; then
-            echo "Directory exists."
-          else
-            echo "Directory does not exist."
-            exit 1
-          fi
+          echo "Contents of the current directory:"
+          ls -la
         shell: bash
+
 
     #   - uses: actions/checkout@v2
     #   - name: Setup Ubuntu Display (if applicable)
