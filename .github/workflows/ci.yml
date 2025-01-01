@@ -41,12 +41,12 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-    #   - name: Add JulGame.jl Dependency
-    #     working-directory: ./Battler
-    #     run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop"))'
-    #   - name: Build Julia Package
-    #     working-directory: ./Battler
-    #     run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
+      - name: Add JulGame.jl Dependency
+        working-directory: ./Battler
+        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop"))'
+      - name: Build Julia Package
+        working-directory: ./Battler
+        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
     #   - name: Run Tests
     #     working-directory: ./Battler
     #     run: julia -e 'using Pkg; Pkg.activate("."); Pkg.test()'
