@@ -13,6 +13,8 @@ jobs:
         with:
           name: build-artifact
           path: NecroMatcher-Mac
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
           run-id: 12575126691
 
       - name: Display Artifact Contents
