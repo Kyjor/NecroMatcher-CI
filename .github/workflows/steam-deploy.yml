@@ -1,0 +1,20 @@
+name: Steam Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Mac Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+          path: NecroMatcher-Mac
+          run-id: 12575126691
+
+      - name: Display Artifact Contents
+        run: ls -R NecroMatcher-Mac
+  
