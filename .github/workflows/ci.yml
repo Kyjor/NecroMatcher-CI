@@ -36,7 +36,7 @@ jobs:
           arch: ${{ matrix.arch }}
       - name: Add JulGame.jl Dependency
         working-directory: ./Battler
-        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop")); Pkg.add(PackageSpec(url="https://github.com/Kyjor/PackageCompiler.jl", rev="main"))'
+        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop")); Pkg.add(PackageSpec(url="https://github.com/Kyjor/PackageCompiler.jl", rev="master"))'
       - name: Build Julia Package
         working-directory: ./Battler
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
