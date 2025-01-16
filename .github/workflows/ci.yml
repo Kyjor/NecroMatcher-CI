@@ -36,7 +36,7 @@ jobs:
           arch: ${{ matrix.arch }}
       - name: Add JulGame.jl Dependency
         working-directory: ./Battler
-        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop"))'
+        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop")); Pkg.add(PackageSpec(url="https://github.com/Kyjor/PackageCompiler.jl", rev="main"))'
       - name: Build Julia Package
         working-directory: ./Battler
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
@@ -52,12 +52,6 @@ jobs:
       - name: Copy Config File to Build (Windows)
         if: matrix.os == 'windows-latest'
         run: copy Battler\config.julgame Build\config.julgame
-      - name: Copy Launch VBS Script to Bin (Windows)
-        if: matrix.os == 'windows-latest'
-        run: copy Battler\LaunchNecroMatcher.vbs Build\bin\LaunchNecroMatcher.vbs
-      - name: Copy Launch Run exe to Bin (Windows)
-        if: matrix.os == 'windows-latest'
-        run: copy Battler\run.exe Build\bin\run.exe
       - name: Zip Build Folder (Mac)
         if: matrix.os == 'macOS-latest'
         run: zip -r Build.zip Build
