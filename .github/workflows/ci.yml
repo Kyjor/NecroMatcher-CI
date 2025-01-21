@@ -128,7 +128,7 @@ jobs:
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
         with:
-          name: Build-windows-latest
+          name: NecroMatcher-Windows
           path: ./Build
       - name: Deploy to Steam (Linux)
         uses: game-ci/steam-deploy@v3
