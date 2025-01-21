@@ -138,5 +138,6 @@ jobs:
           appId: 1410040
           buildDescription: v0.1.0
           rootPath: ./
-          depot3Path: ./Build/NecroMatcher-Windows.zip
+          depot1Path: ./Build/NecroMatcher-Windows.zip
+          #depot3Path: ./Build/NecroMatcher-Windows.zip # depot 3 is actually linux
           releaseBranch: testing
