@@ -130,6 +130,10 @@ jobs:
         with:
           name: NecroMatcher-Windows
           path: ./Build
+      - name: List contents of the Build directory
+        run: ls -l ./Build
+      - name: List contents of the current directory
+        run: ls -l        
       - name: Deploy to Steam (Linux)
         uses: game-ci/steam-deploy@v3
         with:
