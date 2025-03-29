@@ -29,6 +29,7 @@ jobs:
         with:
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           repository: Kyjor/gmtk-2024
+          fetch-depth: 0
       - name: Setup Ubuntu Display (if applicable)
         run: sudo apt-get install xvfb && Xvfb :99 &
         if: matrix.os == 'ubuntu-latest'
