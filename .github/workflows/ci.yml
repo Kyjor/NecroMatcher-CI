@@ -89,6 +89,15 @@ jobs:
         env:
           SHOULD_BUILD: true
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.test()'
+      - name: Copy Config File to Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cp ./Battler/config.julgame ./Build
+      - name: Copy Config File to Build (Mac)
+        if: matrix.os == 'macOS-latest'
+        run: cp ./Battler/config.julgame ./Build
+      - name: Copy Config File to Build (Windows)
+        if: matrix.os == 'windows-latest'
+        run: copy Battler\config.julgame Build\config.julgame
       - name: Zip Build Folder (Mac)
         if: matrix.os == 'macOS-latest'
         run: zip -r Build.zip Build
