@@ -101,6 +101,15 @@ jobs:
       - name: Copy Config File to Build (Windows)
         if: matrix.os == 'windows-latest'
         run: copy Battler\config.julgame Build\config.julgame
+      # - name: Copy steam_api64.so to Build/bin (Linux)
+      #   if: matrix.os == 'ubuntu-latest'
+      #   run: cp ./Battler/steam_api64.so ./Build/bin/
+      # - name: Copy steam_api64.dylib to Build/bin (Mac)
+      #   if: matrix.os == 'macOS-latest'
+      #   run: cp ./Battler/steam_api64.dylib ./Build/bin/
+      - name: Copy steam_api64.dll to Build/bin (Windows)
+        if: matrix.os == 'windows-latest'
+        run: copy Battler\steam_api64.dll Build\bin\steam_api64.dll
       - name: Zip Build Folder (Mac)
         if: matrix.os == 'macOS-latest'
         run: zip -r Build.zip Build
