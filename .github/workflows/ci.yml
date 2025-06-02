@@ -110,6 +110,9 @@ jobs:
       - name: Copy steam_api64.dll to Build/bin (Windows)
         if: matrix.os == 'windows-latest'
         run: copy Battler\steam_api64.dll Build\bin\steam_api64.dll
+      - name: Copy steam_appid.txt to Build/bin (Windows)
+        if: matrix.os == 'windows-latest'
+        run: copy Battler\src\steam_appid.txt Build\bin\steam_appid.txt
       - name: Zip Build Folder (Mac)
         if: matrix.os == 'macOS-latest'
         run: zip -r Build.zip Build
