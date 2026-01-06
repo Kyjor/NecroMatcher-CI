@@ -23,9 +23,8 @@ jobs:
           - windows-latest
         arch:
           - x64
-        exclude: # exclude mac and linux for now
+        exclude: # exclude mac for now
           - os: macOS-latest
-          - os: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -102,9 +101,12 @@ jobs:
       - name: Copy Config File to Build (Windows)
         if: matrix.os == 'windows-latest'
         run: copy Battler\config.julgame Build\config.julgame
-      # - name: Copy steam_api64.so to Build/bin (Linux)
-      #   if: matrix.os == 'ubuntu-latest'
-      #   run: cp ./Battler/steam_api64.so ./Build/bin/
+      - name: Copy steam_api64.so to Build/bin (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cp ./Battler/steam_api64.so ./Build/bin/
+      - name: Copy steam_appid.txt to Build/bin (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cp ./Battler/src/steam_appid.txt ./Build/bin/
       # - name: Copy steam_api64.dylib to Build/bin (Mac)
       #   if: matrix.os == 'macOS-latest'
       #   run: cp ./Battler/steam_api64.dylib ./Build/bin/
@@ -118,7 +120,7 @@ jobs:
         if: matrix.os == 'macOS-latest'
         run: zip -r Build.zip Build
       - name: Upload Artifact (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
         with:
             name: NecroMatcher-Linux
@@ -138,16 +140,22 @@ jobs:
 
   # Job 2: Consume Cached Artifact
   deploy-to-steam:
-    name: Deploy Windows Artifact to Steam from Linux
+    name: Deploy Artifacts to Steam
     runs-on: ubuntu-latest
     needs: test
+    if: github.ref_name == 'main'
     steps:
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
         with:
           name: NecroMatcher-Windows
-          path: ./Build
-      - name: Deploy to Steam (Linux)
+          path: ./BuildWindows
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Linux
+          path: ./BuildLinux
+      - name: Deploy to Steam
         uses: game-ci/steam-deploy@v3
         with:
           username: ${{ secrets.STEAM_USERNAME }}
@@ -155,6 +163,6 @@ jobs:
           appId: 1410040
           buildDescription: v0.1.0
           rootPath: ./
-          depot1Path: Build
-          #depot3Path: ./Build/NecroMatcher-Windows.zip # depot 3 is actually linux
+          depot1Path: BuildWindows
+          depot3Path: BuildLinux
           releaseBranch: testing
