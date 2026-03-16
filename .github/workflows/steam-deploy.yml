@@ -2,6 +2,11 @@ name: Steam Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'CI workflow run ID that produced the NecroMatcher-Mac artifact'
+        required: true
+        type: string
 
 jobs:
   deploy:
@@ -11,11 +16,9 @@ jobs:
       - name: Download Mac Artifact
         uses: actions/download-artifact@v4
         with:
-          name: build-artifact
+          name: NecroMatcher-Mac
           path: NecroMatcher-Mac
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: 12575126691
+          run-id: ${{ inputs.run_id }}
 
       - name: Display Artifact Contents
         run: ls -R NecroMatcher-Mac

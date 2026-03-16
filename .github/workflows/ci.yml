@@ -23,8 +23,6 @@ jobs:
           - windows-latest
         arch:
           - x64
-        exclude: # exclude mac for now
-          - os: macOS-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -44,7 +42,7 @@ jobs:
           pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
           pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
       - name: Install BlackHole on macOS
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macOS-latest'
         run: |
           brew install blackhole-2ch
       - name: Install Scream on Windows
@@ -107,18 +105,49 @@ jobs:
       - name: Copy steam_appid.txt to Build/bin (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: cp ./Battler/src/steam_appid.txt ./Build/bin/
-      # - name: Copy steam_api64.dylib to Build/bin (Mac)
-      #   if: matrix.os == 'macOS-latest'
-      #   run: cp ./Battler/steam_api64.dylib ./Build/bin/
+      - name: Copy libsteam_api.dylib to Build/bin (Mac)
+        if: matrix.os == 'macOS-latest'
+        run: cp ./Battler/libsteam_api.dylib ./Build/bin/
+      - name: Copy steam_appid.txt to Build/bin (Mac)
+        if: matrix.os == 'macOS-latest'
+        run: cp ./Battler/src/steam_appid.txt ./Build/bin/
       - name: Copy steam_api64.dll to Build/bin (Windows)
         if: matrix.os == 'windows-latest'
         run: copy Battler\steam_api64.dll Build\bin\steam_api64.dll
       - name: Copy steam_appid.txt to Build/bin (Windows)
         if: matrix.os == 'windows-latest'
         run: copy Battler\src\steam_appid.txt Build\bin\steam_appid.txt
-      - name: Zip Build Folder (Mac)
+      - name: Import Developer ID certificate (Mac)
         if: matrix.os == 'macOS-latest'
-        run: zip -r Build.zip Build
+        shell: bash
+        run: |
+          echo "$MACOS_CERT_P12_B64" | base64 --decode > dev_id.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import dev_id.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+        env:
+          MACOS_CERT_P12_B64: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+
+      - name: Codesign and notarize (Mac)
+        if: matrix.os == 'macOS-latest'
+        shell: bash
+        run: |
+          export CODESIGN_IDENTITY="${{ secrets.CODESIGN_IDENTITY }}"
+          ./codesign_build.sh
+          /usr/bin/ditto -c -k --keepParent Build Battler.zip
+          xcrun notarytool store-credentials battler-notary \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$NOTARY_APP_PASSWORD"
+          xcrun notarytool submit Battler.zip --keychain-profile battler-notary --wait
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+
       - name: Upload Artifact (Linux)
         if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
@@ -126,7 +155,7 @@ jobs:
             name: NecroMatcher-Linux
             path: ./Build
       - name: Upload Artifact (Mac)
-        if: matrix.os == 'macOS-latest'
+        if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
         with:
             name: NecroMatcher-Mac
@@ -155,6 +184,11 @@ jobs:
         with:
           name: NecroMatcher-Linux
           path: ./BuildLinux
+      - name: Download Mac Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Mac
+          path: ./BuildMac
       - name: Deploy to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -164,5 +198,6 @@ jobs:
           buildDescription: v0.1.0
           rootPath: ./
           depot1Path: BuildWindows
+          depot2Path: BuildMac
           depot3Path: BuildLinux
           releaseBranch: testing
