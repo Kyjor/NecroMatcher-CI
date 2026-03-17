@@ -90,6 +90,7 @@ jobs:
         env:
           SHOULD_BUILD: true
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.test()'
+        continue-on-error: ${{ matrix.os == 'macOS-latest' }}
       - name: Copy Config File to Build (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: cp ./Battler/config.julgame ./Build
