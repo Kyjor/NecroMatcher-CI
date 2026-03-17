@@ -138,12 +138,12 @@ jobs:
         run: |
           export CODESIGN_IDENTITY="${{ secrets.CODESIGN_IDENTITY }}"
           ./codesign_build.sh
-          /usr/bin/ditto -c -k --keepParent Build Battler.zip
+          /usr/bin/ditto -c -k --keepParent Battler.app Battler.app.zip
           xcrun notarytool store-credentials battler-notary \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$NOTARY_APP_PASSWORD"
-          xcrun notarytool submit Battler.zip --keychain-profile battler-notary --wait
+          xcrun notarytool submit Battler.app.zip --keychain-profile battler-notary --wait
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
