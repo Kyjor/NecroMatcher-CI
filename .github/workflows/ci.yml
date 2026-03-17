@@ -155,12 +155,17 @@ jobs:
         with:
             name: NecroMatcher-Linux
             path: ./Build
+      - name: Package Mac artifact with Build parent
+        if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
+        run: |
+          mkdir -p MacArtifact/Build
+          cp -a Build/. MacArtifact/Build/
       - name: Upload Artifact (Mac)
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
         with:
             name: NecroMatcher-Mac
-            path: ./Build
+            path: MacArtifact
       - name: Upload Artifact (Windows)
         if: matrix.os == 'windows-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
@@ -199,6 +204,6 @@ jobs:
           buildDescription: v0.1.0
           rootPath: ./
           depot1Path: BuildWindows
-          depot2Path: BuildMac
+          depot2Path: BuildMac/MacArtifact
           depot3Path: BuildLinux
           releaseBranch: testing
