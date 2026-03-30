@@ -1,0 +1,222 @@
+# Godot / Campception — separate path from Julia NecroMatcher CI (ci.yml).
+# Triggered by repository_dispatch type `trigger-campception-ci` from Kyjor/campception.
+
+name: Campception CI
+
+on:
+  repository_dispatch:
+    types: [trigger-campception-ci]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Kyjor/campception commit SHA (leave empty to use main)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  GODOT_SEMVER: 4.6.1-stable
+  GODOT_DL_BASE: https://github.com/godotengine/godot-builds/releases/download/4.6.1-stable
+  STEAM_APP_ID: '1748140'
+  STEAM_FIRST_DEPOT_ID: '1748142'
+
+jobs:
+  prepare:
+    name: Prepare
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'repository_dispatch' && github.event.client_payload.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    outputs:
+      checkout_ref: ${{ steps.meta.outputs.sha }}
+    steps:
+      - id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "sha=${{ github.event.client_payload.sha }}" >> "$GITHUB_OUTPUT"
+          elif [ "x${{ github.event.inputs.sha }}x" != "xx" ]; then
+            echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=main" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-linux:
+    name: Campception — Export Linux
+    needs: prepare
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Kyjor/campception
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          ssh-key: ${{ secrets.CAMPCEPTION_SSH_PRIVATE_KEY }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: dotnet build
+        run: dotnet build Campception.csproj -c Release
+
+      - name: Godot + export templates
+        run: |
+          set -euo pipefail
+          curl -sSL -o godot.zip "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_linux_x86_64.zip"
+          curl -sSL -o templates.tpz "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_export_templates.tpz"
+          unzip -q godot.zip
+          chmod +x Godot_v${GODOT_SEMVER}_mono_linux.x86_64
+          mkdir -p "$HOME/.local/share/godot/export_templates"
+          unzip -q templates.tpz -d "$HOME/.local/share/godot/export_templates"
+
+      - name: Import + export
+        run: |
+          set -euo pipefail
+          GODOT="./Godot_v${GODOT_SEMVER}_mono_linux.x86_64"
+          mkdir -p Build
+          "$GODOT" --headless --path . --import
+          "$GODOT" --headless --path . --export-release "Linux" "Build/Campception.x86_64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Campception-Linux
+          path: Build/
+
+  build-windows:
+    name: Campception — Export Windows
+    needs: prepare
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Kyjor/campception
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          ssh-key: ${{ secrets.CAMPCEPTION_SSH_PRIVATE_KEY }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: dotnet build
+        run: dotnet build Campception.csproj -c Release
+
+      - name: Godot + export templates
+        run: |
+          set -euo pipefail
+          curl -sSL -o godot.zip "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_win64.zip"
+          curl -sSL -o templates.tpz "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_export_templates.tpz"
+          unzip -q godot.zip
+          mkdir -p "$APPDATA/Godot/export_templates"
+          unzip -q templates.tpz -d "$APPDATA/Godot/export_templates"
+
+      - name: Import + export
+        run: |
+          set -euo pipefail
+          GODOT="Godot_v${GODOT_SEMVER}_mono_win64.exe"
+          if [ ! -f "$GODOT" ]; then
+            GODOT="$(find . -maxdepth 3 -name 'Godot_v*_mono_win64.exe' | head -1)"
+          fi
+          mkdir -p Build
+          "$GODOT" --headless --path . --import
+          "$GODOT" --headless --path . --export-release "Windows Desktop" "./Build/Campception.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Campception-Windows
+          path: Build/
+
+  build-macos:
+    name: Campception — Export macOS
+    needs: prepare
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Kyjor/campception
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          ssh-key: ${{ secrets.CAMPCEPTION_SSH_PRIVATE_KEY }}
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: dotnet build
+        run: dotnet build Campception.csproj -c Release
+
+      - name: Disable macOS code signing for CI
+        run: |
+          set -euo pipefail
+          perl -pi -e 's/^codesign\/codesign=1$/codesign\/codesign=0/' export_presets.cfg
+
+      - name: Godot + export templates
+        run: |
+          set -euo pipefail
+          curl -sSL -o godot.zip "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_macos.universal.zip"
+          curl -sSL -o templates.tpz "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_export_templates.tpz"
+          unzip -q godot.zip
+          mkdir -p "$HOME/Library/Application Support/Godot/export_templates"
+          unzip -q templates.tpz -d "$HOME/Library/Application Support/Godot/export_templates"
+
+      - name: Import + export
+        run: |
+          set -euo pipefail
+          GODOT="$(find . -path '*.app/Contents/MacOS/Godot' -type f | head -1)"
+          if [ -z "$GODOT" ]; then
+            echo 'Godot binary not found after unzip' >&2
+            ls -laR
+            exit 1
+          fi
+          mkdir -p Build
+          "$GODOT" --headless --path . --import
+          "$GODOT" --headless --path . --export-release "macOS" "./Build/Campception.app"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Campception-macOS
+          path: Build/
+
+  deploy-to-steam:
+    name: Campception — Deploy to Steam
+    runs-on: ubuntu-latest
+    needs: [prepare, build-linux, build-windows, build-macos]
+    if: success()
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Campception-Windows
+          path: ./BuildWindows
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Campception-Linux
+          path: ./BuildLinux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Campception-macOS
+          path: ./BuildMac
+
+      - name: Deploy to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: ${{ env.STEAM_APP_ID }}
+          firstDepotIdOverride: ${{ env.STEAM_FIRST_DEPOT_ID }}
+          buildDescription: Campception CI
+          rootPath: ./
+          depot1Path: BuildWindows
+          depot2Path: BuildLinux
+          depot3Path: BuildMac
+          releaseBranch: testing
