@@ -18,6 +18,8 @@ permissions:
 
 env:
   GODOT_SEMVER: 4.6.1-stable
+  # Must match templates/version.txt inside Godot_*_mono_export_templates.tpz (not the .zip folder name).
+  GODOT_TEMPLATE_VERSION: 4.6.1.stable.mono
   GODOT_DL_BASE: https://github.com/godotengine/godot-builds/releases/download/4.6.1-stable
   STEAM_APP_ID: '1748140'
   STEAM_FIRST_DEPOT_ID: '1748142'
@@ -70,8 +72,12 @@ jobs:
           unzip -q godot.zip
           GODOT="./Godot_v${GODOT_SEMVER}_mono_linux_x86_64/Godot_v${GODOT_SEMVER}_mono_linux.x86_64"
           chmod +x "$GODOT"
+          TMP="$(mktemp -d)"
+          unzip -q templates.tpz -d "$TMP"
           mkdir -p "$HOME/.local/share/godot/export_templates"
-          unzip -q templates.tpz -d "$HOME/.local/share/godot/export_templates"
+          rm -rf "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+          mv "$TMP/templates" "$HOME/.local/share/godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+          rmdir "$TMP" 2>/dev/null || true
 
       - name: Export Linux
         run: |
@@ -114,8 +120,12 @@ jobs:
           curl -sSL -o godot.zip "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_win64.zip"
           curl -sSL -o templates.tpz "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_export_templates.tpz"
           unzip -q godot.zip
+          TMP="$(mktemp -d)"
+          unzip -q templates.tpz -d "$TMP"
           mkdir -p "$APPDATA/Godot/export_templates"
-          unzip -q templates.tpz -d "$APPDATA/Godot/export_templates"
+          rm -rf "$APPDATA/Godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+          mv "$TMP/templates" "$APPDATA/Godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+          rmdir "$TMP" 2>/dev/null || true
 
       - name: Export Windows
         run: |
@@ -163,8 +173,12 @@ jobs:
           curl -sSL -o godot.zip "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_macos.universal.zip"
           curl -sSL -o templates.tpz "${GODOT_DL_BASE}/Godot_v${GODOT_SEMVER}_mono_export_templates.tpz"
           unzip -q godot.zip
+          TMP="$(mktemp -d)"
+          unzip -q templates.tpz -d "$TMP"
           mkdir -p "$HOME/Library/Application Support/Godot/export_templates"
-          unzip -q templates.tpz -d "$HOME/Library/Application Support/Godot/export_templates"
+          rm -rf "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+          mv "$TMP/templates" "$HOME/Library/Application Support/Godot/export_templates/${GODOT_TEMPLATE_VERSION}"
+          rmdir "$TMP" 2>/dev/null || true
 
       - name: Export macOS
         run: |
