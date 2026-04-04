@@ -4,22 +4,75 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'CI workflow run ID that produced the NecroMatcher-Mac artifact'
+        description: 'CI workflow run ID that produced NecroMatcher-Linux / NecroMatcher-Windows artifacts'
         required: true
         type: string
+      targets:
+        description: 'Platforms to deploy to Steam'
+        required: true
+        type: choice
+        options:
+          - both
+          - linux
+          - windows
+        default: both
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download Mac Artifact
+      - name: Download Windows Artifact
+        if: inputs.targets == 'both' || inputs.targets == 'windows'
         uses: actions/download-artifact@v4
         with:
-          name: NecroMatcher-Mac
-          path: NecroMatcher-Mac
+          name: NecroMatcher-Windows
+          path: ./BuildWindows
           run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Display Artifact Contents
-        run: ls -R NecroMatcher-Mac
-  
+      - name: Download Linux Artifact
+        if: inputs.targets == 'both' || inputs.targets == 'linux'
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Linux
+          path: ./BuildLinux
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to Steam (Windows + Linux)
+        if: inputs.targets == 'both'
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1410040
+          buildDescription: v0.1.0
+          rootPath: ./
+          depot1Path: BuildWindows
+          depot3Path: BuildLinux
+          releaseBranch: testing
+
+      - name: Deploy to Steam (Windows only)
+        if: inputs.targets == 'windows'
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1410040
+          buildDescription: v0.1.0
+          rootPath: ./
+          depot1Path: BuildWindows
+          releaseBranch: testing
+
+      - name: Deploy to Steam (Linux only)
+        if: inputs.targets == 'linux'
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1410040
+          buildDescription: v0.1.0
+          rootPath: ./
+          depot3Path: BuildLinux
+          releaseBranch: testing
