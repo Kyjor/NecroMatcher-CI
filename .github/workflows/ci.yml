@@ -19,7 +19,7 @@ jobs:
           - '1.11'
         os:
           - ubuntu-latest
-          - macOS-latest
+          # - macOS-latest  # disabled for now
           - windows-latest
         arch:
           - x64
@@ -90,7 +90,7 @@ jobs:
         env:
           SHOULD_BUILD: true
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.test()'
-        continue-on-error: ${{ matrix.os == 'macOS-latest' }}
+        #continue-on-error: ${{ matrix.os == 'macOS-latest' }}
       - name: Copy Config File to Build (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: cp ./Battler/config.julgame ./Build
@@ -190,11 +190,11 @@ jobs:
         with:
           name: NecroMatcher-Linux
           path: ./BuildLinux
-      - name: Download Mac Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: NecroMatcher-Mac
-          path: ./BuildMac
+      # - name: Download Mac Artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: NecroMatcher-Mac
+      #     path: ./BuildMac
       - name: Deploy to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -204,6 +204,6 @@ jobs:
           buildDescription: v0.1.0
           rootPath: ./
           depot1Path: BuildWindows
-          depot2Path: BuildMac/MacArtifact
+          #depot2Path: BuildMac/MacArtifact
           depot3Path: BuildLinux
           releaseBranch: testing
