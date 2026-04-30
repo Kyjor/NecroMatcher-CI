@@ -53,6 +53,20 @@ jobs:
           depot3Path: BuildLinux
           releaseBranch: testing
 
+      # `both` previously skipped demo uploads (demo steps only matched windows|linux).
+      - name: Deploy Demo to Steam (Windows + Linux)
+        if: inputs.targets == 'both'
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 4623610
+          buildDescription: Demo
+          rootPath: ./
+          depot1Path: BuildWindows
+          depot3Path: BuildLinux
+          releaseBranch: testing
+
       - name: Deploy to Steam (Windows only)
         if: inputs.targets == 'windows'
         uses: game-ci/steam-deploy@v3
