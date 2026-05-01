@@ -207,3 +207,16 @@ jobs:
           #depot2Path: BuildMac/MacArtifact
           depot3Path: BuildLinux
           releaseBranch: testing
+
+      - name: Deploy Demo to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 4623610
+          buildDescription: Demo
+          rootPath: ./
+          depot1Path: BuildWindows
+          #depot2Path: BuildMac/MacArtifact
+          depot3Path: BuildLinux
+          releaseBranch: testing
