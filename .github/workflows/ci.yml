@@ -208,6 +208,9 @@ jobs:
           depot3Path: BuildLinux
           releaseBranch: testing
 
+      - name: Clean Steam deploy output
+        run: rm -rf BuildOutput
+
       - name: Deploy Demo to Steam
         uses: game-ci/steam-deploy@v3
         with:

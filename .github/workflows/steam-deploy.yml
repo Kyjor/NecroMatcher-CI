@@ -54,6 +54,10 @@ jobs:
           releaseBranch: testing
 
       # `both` previously skipped demo uploads (demo steps only matched windows|linux).
+      - name: Clean Steam deploy output (Windows + Linux)
+        if: inputs.targets == 'both'
+        run: rm -rf BuildOutput
+
       - name: Deploy Demo to Steam (Windows + Linux)
         if: inputs.targets == 'both'
         uses: game-ci/steam-deploy@v3
@@ -78,7 +82,11 @@ jobs:
           rootPath: ./
           depot1Path: BuildWindows
           releaseBranch: testing
-      
+
+      - name: Clean Steam deploy output (Windows only)
+        if: inputs.targets == 'windows'
+        run: rm -rf BuildOutput
+
       - name: Deploy Demo to Steam (Windows only)
         if: inputs.targets == 'windows'
         uses: game-ci/steam-deploy@v3
@@ -102,6 +110,10 @@ jobs:
           rootPath: ./
           depot3Path: BuildLinux
           releaseBranch: testing
+
+      - name: Clean Steam deploy output (Linux only)
+        if: inputs.targets == 'linux'
+        run: rm -rf BuildOutput
 
       - name: Deploy Demo to Steam (Linux only)
         if: inputs.targets == 'linux'
