@@ -4,42 +4,46 @@
     "execute-command": "/Users/kyjor/Documents/Projects/Julia/NecroMatcher-CI/mac-local/verify-and-run.sh",
     "response-message": "Starting NecroMatcher macOS build and Steam upload...",
     "trigger-rule": {
-      "or": [
+      "and": [
         {
-          "and": [
-            {
-              "match": {
-                "type": "value",
-                "value": "refs/heads/main",
-                "parameter": {
-                  "source": "payload",
-                  "name": "ref"
-                }
-              }
+          "match": {
+            "type": "payload-hmac-sha256",
+            "secret": "{{ getenv \"GITHUB_WEBHOOK_SECRET\" | js }}",
+            "parameter": {
+              "source": "header",
+              "name": "X-Hub-Signature-256"
             }
-          ]
+          }
         },
         {
-          "and": [
+          "or": [
             {
-              "match": {
-                "type": "value",
-                "value": "requested",
-                "parameter": {
-                  "source": "payload",
-                  "name": "action"
+              "and": [
+                {
+                  "match": {
+                    "type": "value",
+                    "value": "refs/heads/main",
+                    "parameter": {
+                      "source": "payload",
+                      "name": "ref"
+                    }
+                  }
                 }
-              }
+              ]
             },
             {
-              "match": {
-                "type": "value",
-                "value": "trigger-ci",
-                "parameter": {
-                  "source": "payload",
-                  "name": "workflow_run.name"
+              "and": [
+                {
+                  "match": {
+                    "type": "value",
+                    "value": "trigger-ci",
+                    "parameter": {
+                      "source": "payload",
+                      "name": "workflow_run.name"
+                    }
+                  }
                 }
-              }
+              ]
             }
           ]
         }

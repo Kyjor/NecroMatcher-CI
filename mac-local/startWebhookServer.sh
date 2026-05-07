@@ -15,6 +15,7 @@ PORT="${WEBHOOK_PORT:-2095}"
 BIND="${WEBHOOK_BIND:-127.0.0.1}"
 
 webhook \
+  -template \
   -hooks "$HOOKS_FILE" \
   -ip "$BIND" \
   -port "$PORT" \

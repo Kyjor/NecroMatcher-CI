@@ -23,11 +23,4 @@ if [ -f "$LOCAL_CREDS_ENV" ]; then
   set +a
 fi
 
-if [ -n "${LOCAL_WEBHOOK_SECRET:-}" ]; then
-  if [ "${HTTP_X_LOCAL_BUILD_TOKEN:-}" != "$LOCAL_WEBHOOK_SECRET" ]; then
-    echo "Unauthorized" >&2
-    exit 1
-  fi
-fi
-
 exec "$SCRIPT_DIR/build-and-upload-mac.sh"

@@ -17,8 +17,29 @@ git pull
 
 export JULIA_PROJECT="$BATTLER_DIR"
 export SHOULD_BUILD=true
+JULIA_BIN="${JULIA_BIN:-}"
+if [ -z "$JULIA_BIN" ]; then
+  JULIA_BIN="$(command -v julia || true)"
+fi
+if [ -z "$JULIA_BIN" ] && [ -x "$HOME/.juliaup/bin/julia" ]; then
+  JULIA_BIN="$HOME/.juliaup/bin/julia"
+fi
+if [ -z "$JULIA_BIN" ]; then
+  echo "julia executable not found. Set JULIA_BIN in mac-local/local-creds.env."
+  exit 1
+fi
 
-julia -e 'using Pkg; Pkg.activate("."); Pkg.test()' --project="."
+# Ensure child processes spawned by tests can find julia by name.
+export PATH="$(dirname "$JULIA_BIN"):/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
+# Battler's SHOULD_BUILD path currently expects git at /opt/homebrew/bin/git on macOS.
+# Create a local shim to /usr/bin/git when needed so launchd runs are consistent.
+if [ ! -x /opt/homebrew/bin/git ] && [ -x /usr/bin/git ]; then
+  mkdir -p /opt/homebrew/bin 2>/dev/null || true
+  ln -sf /usr/bin/git /opt/homebrew/bin/git 2>/dev/null || true
+fi
+
+"$JULIA_BIN" -e 'using Pkg; Pkg.activate("."); Pkg.test()' --project="."
 
 mkdir -p "$SOURCE_ROOT/Build/bin"
 cp "$BATTLER_DIR/config.julgame" "$SOURCE_ROOT/Build/"
