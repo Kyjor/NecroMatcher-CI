@@ -46,7 +46,8 @@ cp "$BATTLER_DIR/config.julgame" "$SOURCE_ROOT/Build/"
 cp "$BATTLER_DIR/libsteam_api.dylib" "$SOURCE_ROOT/Build/bin/"
 cp "$BATTLER_DIR/src/steam_appid.txt" "$SOURCE_ROOT/Build/bin/"
 
-../codesign_build.sh
+# Absolute path so $0 in codesign_build.sh is not "../..."; also avoids wrong entitlements path.
+"$SOURCE_ROOT/codesign_build.sh"
 
 cd "$SOURCE_ROOT"
 if [ ! -d "Battler.app" ]; then

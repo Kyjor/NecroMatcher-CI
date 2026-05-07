@@ -10,7 +10,8 @@
 # Then notarize: xcrun notarytool submit Battler.app.zip --keychain-profile battler-notary --wait
 
 set -e
-cd "$(dirname "$0")"
+SCRIPT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_ROOT"
 
 if [[ "$(uname)" != Darwin ]]; then
   echo "Codesigning is for macOS only. Skipping."
@@ -24,7 +25,18 @@ if [[ ! -f "$BINARY" ]]; then
 fi
 
 IDENTITY="${CODESIGN_IDENTITY:?Set CODESIGN_IDENTITY, e.g. export CODESIGN_IDENTITY=\"Developer ID Application: Your Name (TEAM_ID)\"}"
-ENTITLEMENTS="$(dirname "$0")/entitlements.plist"
+ENTITLEMENTS="$SCRIPT_ROOT/entitlements.plist"
+if [[ ! -f "$ENTITLEMENTS" ]]; then
+  echo "Entitlements not found: $ENTITLEMENTS"
+  exit 1
+fi
+# LaunchAgent / TCC often blocks reading plists under ~/Documents; codesign then reports "cannot read entitlement data".
+if [[ "$ENTITLEMENTS" == *"/Documents/"* ]]; then
+  _ENT_COPY="$(mktemp -t battler-entitlements)"
+  cp "$ENTITLEMENTS" "$_ENT_COPY"
+  ENTITLEMENTS="$_ENT_COPY"
+  trap "rm -f \"${_ENT_COPY}\"" EXIT
+fi
 
 echo "Signing all dylibs and executables in Build (required for notarization)..."
 find Build -type f \( -name "*.dylib" -o -name "*.so" \) -print0 | while IFS= read -r -d '' f; do

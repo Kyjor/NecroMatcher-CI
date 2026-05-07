@@ -2,7 +2,8 @@
 # Installs a LaunchAgent so the NecroMatcher webhook server starts at login and stays running.
 # Run once after clone or path change. Requires: brew install webhook (or webhook on PATH).
 #
-# GitHub webhook HMAC: set GITHUB_WEBHOOK_SECRET in mac-local/webhook.env (gitignored) —
+# GitHub webhook HMAC: set GITHUB_WEBHOOK_SECRET in mac-local/webhook.env or mac-local/local-creds.env (gitignored).
+# This script copies those files to ~/.config/necromatcher-ci/ — LaunchAgent cannot source env from ~/Documents (macOS TCC).
 # hooks.json uses a Go template; webhook must run with -template (handled by the runner).
 
 set -euo pipefail
@@ -35,23 +36,33 @@ xattr -dr com.apple.provenance "$SCRIPT_DIR" 2>/dev/null || true
 
 mkdir -p "${HOME}/Library/LaunchAgents" "${HOME}/Library/Logs"
 
-# Runner lives in ~/Library/LaunchAgents so launchd can execute; sources webhook.env for GITHUB_WEBHOOK_SECRET.
+# LaunchAgents cannot read env files under ~/Documents (TCC). Copy secrets to ~/.config for the runner.
+CONFIG_DIR="${HOME}/.config/necromatcher-ci"
+mkdir -p "$CONFIG_DIR"
+for name in webhook.env local-creds.env; do
+  if [ -f "${SCRIPT_DIR}/${name}" ]; then
+    cp -f "${SCRIPT_DIR}/${name}" "${CONFIG_DIR}/${name}"
+  fi
+done
+
+# Runner sources only ~/.config copies (not mac-local/*.env under Documents).
 RUNNER="${HOME}/Library/LaunchAgents/${LABEL}-runner.sh"
 cat > "$RUNNER" <<RUNNER_SCRIPT
 #!/bin/bash
 set -euo pipefail
-SCRIPT_DIR="${SCRIPT_DIR}"
 WEBHOOK_BIN="${WEBHOOK_BIN}"
 HOOKS_FILE="${HOOKS_FILE}"
 BIND="${BIND}"
 PORT="${PORT}"
-WEBHOOK_ENV="\$SCRIPT_DIR/webhook.env"
-if [ -f "\$WEBHOOK_ENV" ]; then
-  set -a
-  # shellcheck source=/dev/null
-  . "\$WEBHOOK_ENV"
-  set +a
-fi
+CONFIG_DIR="\${HOME}/.config/necromatcher-ci"
+for f in "\${CONFIG_DIR}/webhook.env" "\${CONFIG_DIR}/local-creds.env"; do
+  if [ -f "\$f" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "\$f"
+    set +a
+  fi
+done
 exec "\$WEBHOOK_BIN" -template -hooks "\$HOOKS_FILE" -ip "\$BIND" -port "\$PORT" -verbose
 RUNNER_SCRIPT
 chmod +x "$RUNNER"
@@ -94,5 +105,5 @@ launchctl kickstart -k "gui/${USER_ID}/${LABEL}"
 
 echo "LaunchAgent ${LABEL} installed and started."
 echo "Runner: ${RUNNER}"
-echo "Set GITHUB_WEBHOOK_SECRET in ${SCRIPT_DIR}/webhook.env (same value as GitHub webhook secret)."
+echo "Edit secrets in ${SCRIPT_DIR}/webhook.env or ${SCRIPT_DIR}/local-creds.env then re-run this script — copies sync to ${CONFIG_DIR}/ (LaunchAgent cannot read Documents)."
 echo "Logs: ${HOME}/Library/Logs/necromatcher-webhook.log (and .err.log)"

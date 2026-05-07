@@ -1,5 +1,11 @@
 [
   {
+    "id": "ping",
+    "execute-command": "/usr/bin/true",
+    "response-message": "webhook ok",
+    "http-methods": ["GET", "HEAD"]
+  },
+  {
     "id": "build-necromatcher-mac",
     "execute-command": "/Users/kyjor/Documents/Projects/Julia/NecroMatcher-CI/mac-local/verify-and-run.sh",
     "response-message": "Starting NecroMatcher macOS build and Steam upload...",
@@ -8,7 +14,7 @@
         {
           "match": {
             "type": "payload-hmac-sha256",
-            "secret": "{{ getenv \"GITHUB_WEBHOOK_SECRET\" | js }}",
+            "secret": "{{ getenv "GITHUB_WEBHOOK_SECRET" | js }}",
             "parameter": {
               "source": "header",
               "name": "X-Hub-Signature-256"
