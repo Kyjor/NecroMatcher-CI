@@ -7,14 +7,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LABEL="com.kyjor.necromatcher-webhook"
 DEST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
-STARTER="${SCRIPT_DIR}/startWebhookServer.sh"
+HOOKS_FILE="${SCRIPT_DIR}/hooks.json"
+WEBHOOK_BIN="$(command -v webhook)"
+BIND="${WEBHOOK_BIND:-127.0.0.1}"
+PORT="${WEBHOOK_PORT:-2095}"
 
 if ! command -v webhook >/dev/null 2>&1; then
   echo "webhook not on PATH. Install with: brew install webhook" >&2
   exit 1
 fi
 
-chmod +x "$STARTER" "${SCRIPT_DIR}/verify-and-run.sh" "${SCRIPT_DIR}/build-and-upload-mac.sh" "${SCRIPT_DIR}/build-mac.sh" "${SCRIPT_DIR}/steam-upload-mac.sh" 2>/dev/null || true
+chmod +x "${SCRIPT_DIR}/verify-and-run.sh" "${SCRIPT_DIR}/build-and-upload-mac.sh" "${SCRIPT_DIR}/build-mac.sh" "${SCRIPT_DIR}/steam-upload-mac.sh" 2>/dev/null || true
 # Some setups mark copied scripts with restrictive provenance/quarantine metadata.
 # Clear known exec-blocking attrs so launchd can execute the starter script.
 xattr -dr com.apple.quarantine "$SCRIPT_DIR" 2>/dev/null || true
@@ -31,8 +34,14 @@ cat > "$DEST" <<PLIST
   <string>${LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
-    <string>${STARTER}</string>
+    <string>${WEBHOOK_BIN}</string>
+    <string>-hooks</string>
+    <string>${HOOKS_FILE}</string>
+    <string>-ip</string>
+    <string>${BIND}</string>
+    <string>-port</string>
+    <string>${PORT}</string>
+    <string>-verbose</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
