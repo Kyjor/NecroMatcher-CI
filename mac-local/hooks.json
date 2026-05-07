@@ -1,0 +1,22 @@
+[
+  {
+    "id": "build-necromatcher-mac",
+    "execute-command": "/Users/kyjor/Documents/Projects/Julia/NecroMatcher-CI/mac-local/verify-and-run.sh",
+    "response-message": "Starting NecroMatcher macOS build and Steam upload...",
+    "trigger-rule": {
+      "and": [
+        {
+          "match": {
+            "type": "value",
+            "value": "refs/heads/main",
+            "parameter": {
+              "source": "payload",
+              "name": "ref"
+            }
+          }
+        }
+      ]
+    }
+  }
+]
+

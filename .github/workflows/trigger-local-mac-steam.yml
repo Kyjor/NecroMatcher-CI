@@ -1,0 +1,26 @@
+name: Trigger local Mac Steam build
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger-local-mac-steam]
+
+jobs:
+  trigger-local-webhook:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST to local Mac webhook
+        env:
+          URL: ${{ secrets.LOCAL_MAC_WEBHOOK_URL }}
+          TOKEN: ${{ secrets.LOCAL_WEBHOOK_SECRET }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "Add repo secret LOCAL_MAC_WEBHOOK_URL (your on-prem URL, e.g. https://ci.example.com/hooks/build-necromatcher-mac)" >&2
+            exit 1
+          fi
+          set -- -fsS -X POST -H "Content-Type: application/json"
+          if [ -n "$TOKEN" ]; then
+            set -- "$@" -H "X-Local-Build-Token: $TOKEN"
+          fi
+          set -- "$@" -d '{"ref":"refs/heads/main"}' "$URL"
+          curl "$@"
