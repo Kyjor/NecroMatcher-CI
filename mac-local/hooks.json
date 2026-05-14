@@ -45,7 +45,7 @@
                     "value": "trigger-ci",
                     "parameter": {
                       "source": "payload",
-                      "name": "workflow_run.name"
+                      "name": "workflow_run.display_title"
                     }
                   }
                 }
