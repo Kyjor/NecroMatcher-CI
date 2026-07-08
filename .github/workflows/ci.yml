@@ -30,6 +30,15 @@ jobs:
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           repository: Kyjor/gmtk-2024
           fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Battler/package-lock.json
+      - name: Install Node Dependencies
+        working-directory: ./Battler
+        run: npm ci
       - name: Setup Ubuntu Display (if applicable)
         run: sudo apt-get install xvfb && Xvfb :99 &
         if: matrix.os == 'ubuntu-latest'
@@ -37,7 +46,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pulseaudio
+          sudo apt-get install -y pulseaudio ffmpeg
           pulseaudio --check || pulseaudio --start
           pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
           pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
@@ -72,6 +81,10 @@ jobs:
         run: net start audiosrv
         shell: powershell
         continue-on-error: true
+      - name: Install ffmpeg on Windows
+        if: matrix.os == 'windows-latest'
+        run: choco install ffmpeg -y --no-progress
+        shell: powershell
 
       - name: Setup Julia
         uses: julia-actions/setup-julia@v1

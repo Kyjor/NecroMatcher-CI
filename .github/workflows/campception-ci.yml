@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: 'Kyjor/campception commit SHA (leave empty to use main)'
+        description: 'Kyjor/campception branch name (leave empty to use main)'
         required: false
         type: string
 
