@@ -40,13 +40,20 @@ jobs:
         working-directory: ./Battler
         run: npm ci
       - name: Setup Ubuntu Display (if applicable)
-        run: sudo apt-get install xvfb && Xvfb :99 &
-        if: matrix.os == 'ubuntu-latest'
-      - name: Install PulseAudio on Ubuntu
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pulseaudio ffmpeg
+          sudo apt-get install -y xvfb libgl1-mesa-dri libglu1-mesa ffmpeg
+          # GHA has no GPU; GLX + mesa llvmpipe lets SDL_RENDERER_ACCELERATED succeed.
+          Xvfb :99 -screen 0 1280x720x24 +extension GLX &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          echo "LIBGL_ALWAYS_SOFTWARE=1" >> "$GITHUB_ENV"
+          echo "SDL_VIDEODRIVER=x11" >> "$GITHUB_ENV"
+          echo "SDL_AUDIODRIVER=dummy" >> "$GITHUB_ENV"
+      - name: Install PulseAudio on Ubuntu
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get install -y pulseaudio
           pulseaudio --check || pulseaudio --start
           pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
           pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
