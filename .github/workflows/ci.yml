@@ -59,10 +59,10 @@ jobs:
           pulseaudio --check || pulseaudio --start
           pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
           pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
-      - name: Install BlackHole on macOS
+      - name: Install BlackHole and ffmpeg on macOS
         if: matrix.os == 'macOS-latest'
         run: |
-          brew install blackhole-2ch
+          brew install blackhole-2ch ffmpeg
       - name: Install Scream on Windows
         if: matrix.os == 'windows-latest'
         shell: powershell
