@@ -15,14 +15,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - '1.11'
-        os:
-          - ubuntu-latest
-          # - macOS-latest  # disabled for now
-          - windows-latest
-        arch:
-          - x64
+        include:
+          - version: '1.11'
+            os: ubuntu-latest
+            arch: x64
+          - version: '1.11'
+            os: macos-latest
+            arch: aarch64
+          - version: '1.11'
+            os: windows-latest
+            arch: x64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -148,6 +150,7 @@ jobs:
           security unlock-keychain -p "" build.keychain
           security import dev_id.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          rm -f dev_id.p12
         env:
           MACOS_CERT_P12_B64: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
@@ -155,19 +158,25 @@ jobs:
       - name: Codesign and notarize (Mac)
         if: matrix.os == 'macOS-latest'
         shell: bash
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
         run: |
-          export CODESIGN_IDENTITY="${{ secrets.CODESIGN_IDENTITY }}"
           ./codesign_build.sh
-          /usr/bin/ditto -c -k --keepParent Build/Battler.app Battler.app.zip
+          if [ ! -d Battler.app ]; then
+            echo "codesign_build.sh did not create Battler.app"
+            exit 1
+          fi
+          /usr/bin/ditto -c -k --keepParent Battler.app Battler.app.zip
           xcrun notarytool store-credentials battler-notary \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$NOTARY_APP_PASSWORD"
           xcrun notarytool submit Battler.app.zip --keychain-profile battler-notary --wait
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+          xcrun stapler staple Battler.app
+          /usr/bin/ditto -c -k --keepParent Battler.app Battler.app.zip
 
       - name: Upload Artifact (Linux)
         if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
@@ -175,11 +184,11 @@ jobs:
         with:
             name: NecroMatcher-Linux
             path: ./Build
-      - name: Package Mac artifact with Build parent
+      - name: Package Mac artifact
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         run: |
-          mkdir -p MacArtifact/Build
-          cp -a Build/. MacArtifact/Build/
+          mkdir -p MacArtifact
+          /usr/bin/ditto Battler.app MacArtifact/Battler.app
       - name: Upload Artifact (Mac)
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
@@ -210,11 +219,11 @@ jobs:
         with:
           name: NecroMatcher-Linux
           path: ./BuildLinux
-      # - name: Download Mac Artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: NecroMatcher-Mac
-      #     path: ./BuildMac
+      - name: Download Mac Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Mac
+          path: ./BuildMac
       - name: Deploy to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -224,7 +233,7 @@ jobs:
           buildDescription: v0.1.0
           rootPath: ./
           depot1Path: BuildWindows
-          #depot2Path: BuildMac/MacArtifact
+          depot2Path: BuildMac
           depot3Path: BuildLinux
           releaseBranch: testing
 
@@ -244,11 +253,11 @@ jobs:
         with:
           name: NecroMatcher-Linux
           path: ./BuildLinux
-      # - name: Download Mac Artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: NecroMatcher-Mac
-      #     path: ./BuildMac
+      - name: Download Mac Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Mac
+          path: ./BuildMac
       - name: Deploy Demo to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -258,6 +267,6 @@ jobs:
           buildDescription: Demo
           rootPath: ./
           depot1Path: BuildWindows
-          #depot2Path: BuildMac/MacArtifact
+          depot2Path: BuildMac
           depot3Path: BuildLinux
           releaseBranch: testing
