@@ -188,7 +188,9 @@ jobs:
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         run: |
           mkdir -p MacArtifact
-          /usr/bin/ditto Battler.app MacArtifact/Battler.app
+          # ditto zip keeps Julia dylib symlinks. upload-artifact of the .app
+          # folder follows them and ships two copies of libjulia-internal.
+          cp -f Battler.app.zip MacArtifact/Battler.app.zip
       - name: Upload Artifact (Mac)
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
@@ -224,6 +226,46 @@ jobs:
         with:
           name: NecroMatcher-Mac
           path: ./BuildMac
+      - name: Unpack Mac app
+        run: |
+          python3 - <<'PY'
+          import hashlib, stat, zipfile
+          from collections import defaultdict
+          from pathlib import Path
+          zpath = Path("BuildMac/Battler.app.zip")
+          out = Path("BuildMac")
+          with zipfile.ZipFile(zpath) as z:
+              for info in z.infolist():
+                  dest = out / info.filename
+                  mode = info.external_attr >> 16
+                  if info.is_dir() or info.filename.endswith("/"):
+                      dest.mkdir(parents=True, exist_ok=True)
+                      continue
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  if stat.S_ISLNK(mode):
+                      dest.symlink_to(z.read(info).decode())
+                      continue
+                  dest.write_bytes(z.read(info))
+                  if mode:
+                      dest.chmod(mode & 0o777)
+          zpath.unlink()
+          lib = next(out.rglob("Build/lib"), None)
+          if lib is not None:
+              groups = defaultdict(list)
+              for p in lib.rglob("*.dylib"):
+                  if p.is_symlink() or not p.is_file():
+                      continue
+                  groups[hashlib.sha256(p.read_bytes()).hexdigest()].append(p)
+              for ps in groups.values():
+                  if len(ps) < 2 or len({p.parent for p in ps}) != 1:
+                      continue
+                  ps.sort(key=lambda p: (len(p.name), p.name))
+                  keep = ps[0]
+                  for p in ps[1:]:
+                      p.unlink()
+                      p.symlink_to(keep.name)
+          print("unpacked", [p.name for p in out.iterdir()])
+          PY
       - name: Deploy to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -258,6 +300,46 @@ jobs:
         with:
           name: NecroMatcher-Mac
           path: ./BuildMac
+      - name: Unpack Mac app
+        run: |
+          python3 - <<'PY'
+          import hashlib, stat, zipfile
+          from collections import defaultdict
+          from pathlib import Path
+          zpath = Path("BuildMac/Battler.app.zip")
+          out = Path("BuildMac")
+          with zipfile.ZipFile(zpath) as z:
+              for info in z.infolist():
+                  dest = out / info.filename
+                  mode = info.external_attr >> 16
+                  if info.is_dir() or info.filename.endswith("/"):
+                      dest.mkdir(parents=True, exist_ok=True)
+                      continue
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  if stat.S_ISLNK(mode):
+                      dest.symlink_to(z.read(info).decode())
+                      continue
+                  dest.write_bytes(z.read(info))
+                  if mode:
+                      dest.chmod(mode & 0o777)
+          zpath.unlink()
+          lib = next(out.rglob("Build/lib"), None)
+          if lib is not None:
+              groups = defaultdict(list)
+              for p in lib.rglob("*.dylib"):
+                  if p.is_symlink() or not p.is_file():
+                      continue
+                  groups[hashlib.sha256(p.read_bytes()).hexdigest()].append(p)
+              for ps in groups.values():
+                  if len(ps) < 2 or len({p.parent for p in ps}) != 1:
+                      continue
+                  ps.sort(key=lambda p: (len(p.name), p.name))
+                  keep = ps[0]
+                  for p in ps[1:]:
+                      p.unlink()
+                      p.symlink_to(keep.name)
+          print("unpacked", [p.name for p in out.iterdir()])
+          PY
       - name: Deploy Demo to Steam
         uses: game-ci/steam-deploy@v3
         with:
