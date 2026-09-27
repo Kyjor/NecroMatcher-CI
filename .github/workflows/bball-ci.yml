@@ -28,7 +28,7 @@ jobs:
       - name: Checkout bball
         uses: actions/checkout@v4
         with:
-          ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
+          ssh-key: ${{ secrets.BBALL_CHECKOUT_KEY }}
           repository: Kyjor/bball
           ref: main
 
