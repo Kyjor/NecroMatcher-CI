@@ -1,0 +1,140 @@
+name: bball
+
+on:
+  workflow_dispatch:
+
+  repository_dispatch:
+    types: [trigger-bball]
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS
+            artifact: bball-macos
+          - os: windows-latest
+            name: Windows
+            artifact: bball-windows
+          - os: ubuntu-latest
+            name: Linux
+            artifact: bball-linux
+
+    steps:
+      - name: Checkout bball
+        uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
+          repository: Kyjor/bball
+          ref: main
+
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config \
+            libgl1-mesa-dev libx11-dev libxi-dev libxcursor-dev libasound2-dev
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Collect files
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            src=build/Release
+          else
+            src=build
+          fi
+          mkdir -p dist
+          find "$src" -maxdepth 1 -type f \
+            \( -name 'bball' -o -name 'bball.exe' -o -name 'bball.pdb' \
+               -o -name 'libsteam_api*' -o -name 'steam_api64*' -o -name 'steam_appid.txt' \) \
+            -exec cp {} dist/ \;
+          cp -R "$src/assets" dist/assets
+
+      - name: Import Developer ID certificate
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERT_P12_B64: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERT_P12_B64" ]; then
+            echo "MACOS_CERT_P12 secret is missing"
+            exit 1
+          fi
+          echo "$MACOS_CERT_P12_B64" | base64 --decode > dev_id.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import dev_id.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          rm -f dev_id.p12
+
+      - name: Place App Store Connect API key
+        if: runner.os == 'macOS'
+        env:
+          APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          printf '%s' "$APP_STORE_CONNECT_API_KEY_CONTENT" > "$KEY_PATH"
+          echo "APP_STORE_CONNECT_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign and notarize
+        if: runner.os == 'macOS'
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_PATH: ${{ env.APP_STORE_CONNECT_API_KEY_PATH }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+        run: bash ci/sign_mac.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+
+  deploy-to-steam:
+    name: Deploy bball to Steam
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: bball-windows
+          path: ./BuildWindows
+      - name: Download macOS
+        uses: actions/download-artifact@v4
+        with:
+          name: bball-macos
+          path: ./BuildMac
+      - name: Download Linux
+        uses: actions/download-artifact@v4
+        with:
+          name: bball-linux
+          path: ./BuildLinux
+      - name: Deploy to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 5342140
+          buildDescription: bball
+          rootPath: ./
+          depot1Path: BuildWindows
+          depot2Path: BuildMac
+          depot3Path: BuildLinux
+          releaseBranch: testing
