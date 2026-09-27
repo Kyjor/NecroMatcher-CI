@@ -15,14 +15,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - '1.11'
-        os:
-          - ubuntu-latest
-          # - macOS-latest  # disabled for now
-          - windows-latest
-        arch:
-          - x64
+        include:
+          - version: '1.11'
+            os: ubuntu-latest
+            arch: x64
+          - version: '1.11'
+            os: macos-latest
+            arch: aarch64
+          - version: '1.11'
+            os: windows-latest
+            arch: x64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -57,10 +59,10 @@ jobs:
           pulseaudio --check || pulseaudio --start
           pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
           pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
-      - name: Install BlackHole on macOS
+      - name: Install BlackHole and ffmpeg on macOS
         if: matrix.os == 'macOS-latest'
         run: |
-          brew install blackhole-2ch
+          brew install blackhole-2ch ffmpeg
       - name: Install Scream on Windows
         if: matrix.os == 'windows-latest'
         shell: powershell
@@ -148,6 +150,7 @@ jobs:
           security unlock-keychain -p "" build.keychain
           security import dev_id.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          rm -f dev_id.p12
         env:
           MACOS_CERT_P12_B64: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
@@ -155,19 +158,25 @@ jobs:
       - name: Codesign and notarize (Mac)
         if: matrix.os == 'macOS-latest'
         shell: bash
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
         run: |
-          export CODESIGN_IDENTITY="${{ secrets.CODESIGN_IDENTITY }}"
           ./codesign_build.sh
-          /usr/bin/ditto -c -k --keepParent Build/Battler.app Battler.app.zip
+          if [ ! -d Battler.app ]; then
+            echo "codesign_build.sh did not create Battler.app"
+            exit 1
+          fi
+          /usr/bin/ditto -c -k --keepParent Battler.app Battler.app.zip
           xcrun notarytool store-credentials battler-notary \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$NOTARY_APP_PASSWORD"
           xcrun notarytool submit Battler.app.zip --keychain-profile battler-notary --wait
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+          xcrun stapler staple Battler.app
+          /usr/bin/ditto -c -k --keepParent Battler.app Battler.app.zip
 
       - name: Upload Artifact (Linux)
         if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
@@ -175,11 +184,13 @@ jobs:
         with:
             name: NecroMatcher-Linux
             path: ./Build
-      - name: Package Mac artifact with Build parent
+      - name: Package Mac artifact
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         run: |
-          mkdir -p MacArtifact/Build
-          cp -a Build/. MacArtifact/Build/
+          mkdir -p MacArtifact
+          # ditto zip keeps Julia dylib symlinks. upload-artifact of the .app
+          # folder follows them and ships two copies of libjulia-internal.
+          cp -f Battler.app.zip MacArtifact/Battler.app.zip
       - name: Upload Artifact (Mac)
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
@@ -210,11 +221,51 @@ jobs:
         with:
           name: NecroMatcher-Linux
           path: ./BuildLinux
-      # - name: Download Mac Artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: NecroMatcher-Mac
-      #     path: ./BuildMac
+      - name: Download Mac Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Mac
+          path: ./BuildMac
+      - name: Unpack Mac app
+        run: |
+          python3 - <<'PY'
+          import hashlib, stat, zipfile
+          from collections import defaultdict
+          from pathlib import Path
+          zpath = Path("BuildMac/Battler.app.zip")
+          out = Path("BuildMac")
+          with zipfile.ZipFile(zpath) as z:
+              for info in z.infolist():
+                  dest = out / info.filename
+                  mode = info.external_attr >> 16
+                  if info.is_dir() or info.filename.endswith("/"):
+                      dest.mkdir(parents=True, exist_ok=True)
+                      continue
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  if stat.S_ISLNK(mode):
+                      dest.symlink_to(z.read(info).decode())
+                      continue
+                  dest.write_bytes(z.read(info))
+                  if mode:
+                      dest.chmod(mode & 0o777)
+          zpath.unlink()
+          lib = next(out.rglob("Build/lib"), None)
+          if lib is not None:
+              groups = defaultdict(list)
+              for p in lib.rglob("*.dylib"):
+                  if p.is_symlink() or not p.is_file():
+                      continue
+                  groups[hashlib.sha256(p.read_bytes()).hexdigest()].append(p)
+              for ps in groups.values():
+                  if len(ps) < 2 or len({p.parent for p in ps}) != 1:
+                      continue
+                  ps.sort(key=lambda p: (len(p.name), p.name))
+                  keep = ps[0]
+                  for p in ps[1:]:
+                      p.unlink()
+                      p.symlink_to(keep.name)
+          print("unpacked", [p.name for p in out.iterdir()])
+          PY
       - name: Deploy to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -224,7 +275,7 @@ jobs:
           buildDescription: v0.1.0
           rootPath: ./
           depot1Path: BuildWindows
-          #depot2Path: BuildMac/MacArtifact
+          depot2Path: BuildMac
           depot3Path: BuildLinux
           releaseBranch: testing
 
@@ -244,11 +295,51 @@ jobs:
         with:
           name: NecroMatcher-Linux
           path: ./BuildLinux
-      # - name: Download Mac Artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: NecroMatcher-Mac
-      #     path: ./BuildMac
+      - name: Download Mac Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Mac
+          path: ./BuildMac
+      - name: Unpack Mac app
+        run: |
+          python3 - <<'PY'
+          import hashlib, stat, zipfile
+          from collections import defaultdict
+          from pathlib import Path
+          zpath = Path("BuildMac/Battler.app.zip")
+          out = Path("BuildMac")
+          with zipfile.ZipFile(zpath) as z:
+              for info in z.infolist():
+                  dest = out / info.filename
+                  mode = info.external_attr >> 16
+                  if info.is_dir() or info.filename.endswith("/"):
+                      dest.mkdir(parents=True, exist_ok=True)
+                      continue
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  if stat.S_ISLNK(mode):
+                      dest.symlink_to(z.read(info).decode())
+                      continue
+                  dest.write_bytes(z.read(info))
+                  if mode:
+                      dest.chmod(mode & 0o777)
+          zpath.unlink()
+          lib = next(out.rglob("Build/lib"), None)
+          if lib is not None:
+              groups = defaultdict(list)
+              for p in lib.rglob("*.dylib"):
+                  if p.is_symlink() or not p.is_file():
+                      continue
+                  groups[hashlib.sha256(p.read_bytes()).hexdigest()].append(p)
+              for ps in groups.values():
+                  if len(ps) < 2 or len({p.parent for p in ps}) != 1:
+                      continue
+                  ps.sort(key=lambda p: (len(p.name), p.name))
+                  keep = ps[0]
+                  for p in ps[1:]:
+                      p.unlink()
+                      p.symlink_to(keep.name)
+          print("unpacked", [p.name for p in out.iterdir()])
+          PY
       - name: Deploy Demo to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -258,6 +349,6 @@ jobs:
           buildDescription: Demo
           rootPath: ./
           depot1Path: BuildWindows
-          #depot2Path: BuildMac/MacArtifact
+          depot2Path: BuildMac
           depot3Path: BuildLinux
           releaseBranch: testing
