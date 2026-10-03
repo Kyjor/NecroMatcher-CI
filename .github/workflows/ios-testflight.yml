@@ -36,6 +36,35 @@ jobs:
         with:
           version: 4.0.11
 
+      - name: Materialize uiTypes for case-sensitive bundling
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, subprocess
+          repo = "JulGame.jl"
+          listing = subprocess.check_output(
+              ["git", "-C", repo, "ls-tree", "-r", "HEAD"],
+              text=True,
+          )
+          blob = None
+          for line in listing.splitlines():
+              mode, _typ, sha, path = line.split(maxsplit=3)
+              if path.lower().endswith("uitypes.ts") and mode == "100644":
+                  blob = sha
+                  break
+          if not blob:
+              raise SystemExit("uiTypes.ts blob not found")
+          data = subprocess.check_output(["git", "-C", repo, "cat-file", "-p", blob])
+          dest_dir = os.path.join(repo, "ts/_generated/src/engine/UI")
+          for name in os.listdir(dest_dir):
+              if name.lower() == "uitypes.ts":
+                  os.remove(os.path.join(dest_dir, name))
+          dest = os.path.join(dest_dir, "uiTypes.ts")
+          with open(dest, "wb") as f:
+              f.write(data)
+          print(f"wrote {dest} ({len(data)} bytes)")
+          PY
+
       - name: Install npm dependencies
         working-directory: gmtk-2024/Battler
         run: npm ci
