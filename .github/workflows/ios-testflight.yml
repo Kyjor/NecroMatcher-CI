@@ -2,6 +2,8 @@ name: iOS TestFlight
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [trigger-ci]
 
 jobs:
   testflight:
@@ -13,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Kyjor/gmtk-2024
-          ref: develop
+          ref: main
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           path: gmtk-2024
 
