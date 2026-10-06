@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-
   workflow_dispatch:
 
   repository_dispatch:
@@ -45,6 +43,33 @@ jobs:
         with:
           name: NecroMatcher-Mac
           path: ./BuildMac
+      - name: Decrypt artifacts
+        env:
+          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ENCRYPTION_KEY"
+          found=0
+          for dir in BuildWindows BuildLinux BuildMac; do
+            if [ ! -d "$dir" ]; then
+              continue
+            fi
+            found=1
+            if [ ! -f "$dir/payload.enc" ]; then
+              echo "Missing encrypted payload in $dir" >&2
+              exit 1
+            fi
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+              -in "$dir/payload.enc" \
+              -out "$dir/payload.tar.gz" \
+              -pass env:ARTIFACT_ENCRYPTION_KEY
+            tar -xzf "$dir/payload.tar.gz" -C "$dir"
+            rm -f "$dir/payload.enc" "$dir/payload.tar.gz"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No artifacts to decrypt" >&2
+            exit 1
+          fi
       - name: Unpack Mac app
         run: |
           python3 - <<'PY'
@@ -119,6 +144,33 @@ jobs:
         with:
           name: NecroMatcher-Demo-Mac
           path: ./BuildMac
+      - name: Decrypt artifacts
+        env:
+          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ENCRYPTION_KEY"
+          found=0
+          for dir in BuildWindows BuildLinux BuildMac; do
+            if [ ! -d "$dir" ]; then
+              continue
+            fi
+            found=1
+            if [ ! -f "$dir/payload.enc" ]; then
+              echo "Missing encrypted payload in $dir" >&2
+              exit 1
+            fi
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+              -in "$dir/payload.enc" \
+              -out "$dir/payload.tar.gz" \
+              -pass env:ARTIFACT_ENCRYPTION_KEY
+            tar -xzf "$dir/payload.tar.gz" -C "$dir"
+            rm -f "$dir/payload.enc" "$dir/payload.tar.gz"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No artifacts to decrypt" >&2
+            exit 1
+          fi
       - name: Unpack Mac app
         run: |
           python3 - <<'PY'

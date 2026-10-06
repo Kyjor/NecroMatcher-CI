@@ -64,7 +64,7 @@ jobs:
       - name: Install BlackHole and ffmpeg on macOS
         if: matrix.os == 'macOS-latest'
         run: |
-          brew install blackhole-2ch ffmpeg
+          brew install blackhole-2ch ffmpeg openssl@3
       - name: Install Scream on Windows
         if: matrix.os == 'windows-latest'
         shell: powershell
@@ -185,12 +185,24 @@ jobs:
           xcrun stapler staple Battler.app
           /usr/bin/ditto -c -k --keepParent Battler.app Battler.app.zip
 
+      - name: Encrypt artifact (Linux)
+        if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
+        shell: bash
+        env:
+          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ENCRYPTION_KEY"
+          mkdir -p EncryptedArtifact
+          tar -C Build -czf - . | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Linux)
         if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
         with:
             name: ${{ env.ARTIFACT_PREFIX }}-Linux
-            path: ./Build
+            path: EncryptedArtifact/payload.enc
+            retention-days: 1
+            compression-level: 0
       - name: Package Mac artifact
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         run: |
@@ -198,15 +210,41 @@ jobs:
           # ditto zip keeps Julia dylib symlinks. upload-artifact of the .app
           # folder follows them and ships two copies of libjulia-internal.
           cp -f Battler.app.zip MacArtifact/Battler.app.zip
+      - name: Encrypt artifact (Mac)
+        if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
+        shell: bash
+        env:
+          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ENCRYPTION_KEY"
+          # macos-latest openssl is LibreSSL, which does not support -pbkdf2.
+          OPENSSL="$(brew --prefix openssl@3)/bin/openssl"
+          mkdir -p EncryptedArtifact
+          tar -C MacArtifact -czf - . | "$OPENSSL" enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Mac)
         if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
         with:
             name: ${{ env.ARTIFACT_PREFIX }}-Mac
-            path: MacArtifact
+            path: EncryptedArtifact/payload.enc
+            retention-days: 1
+            compression-level: 0
+      - name: Encrypt artifact (Windows)
+        if: matrix.os == 'windows-latest' && github.ref_name == 'main'
+        shell: bash
+        env:
+          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ENCRYPTION_KEY"
+          mkdir -p EncryptedArtifact
+          tar -C Build -czf - . | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Windows)
         if: matrix.os == 'windows-latest' && github.ref_name == 'main'
         uses: actions/upload-artifact@v4
         with:
             name: ${{ env.ARTIFACT_PREFIX }}-Windows
-            path: ./Build
+            path: EncryptedArtifact/payload.enc
+            retention-days: 1
+            compression-level: 0

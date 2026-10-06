@@ -40,6 +40,34 @@ jobs:
           run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Decrypt artifacts
+        env:
+          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ENCRYPTION_KEY"
+          found=0
+          for dir in BuildWindows BuildLinux; do
+            if [ ! -d "$dir" ]; then
+              continue
+            fi
+            found=1
+            if [ ! -f "$dir/payload.enc" ]; then
+              echo "Missing encrypted payload in $dir" >&2
+              exit 1
+            fi
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+              -in "$dir/payload.enc" \
+              -out "$dir/payload.tar.gz" \
+              -pass env:ARTIFACT_ENCRYPTION_KEY
+            tar -xzf "$dir/payload.tar.gz" -C "$dir"
+            rm -f "$dir/payload.enc" "$dir/payload.tar.gz"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No artifacts to decrypt" >&2
+            exit 1
+          fi
+
       - name: Deploy to Steam (Windows + Linux)
         if: inputs.targets == 'both'
         uses: game-ci/steam-deploy@v3
