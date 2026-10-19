@@ -109,6 +109,15 @@ jobs:
       - name: Build Julia Package
         working-directory: ./Battler
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
+      - name: Add swap on Ubuntu (sysimage build can exceed RAM)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo swapoff -a
+          sudo fallocate -l 12G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
       - name: Run Tests and Build
         working-directory: ./Battler
         env:
