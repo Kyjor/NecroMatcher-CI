@@ -123,6 +123,7 @@ jobs:
         env:
           SHOULD_BUILD: true
           NECRO_DEMO: ${{ inputs.demo }}
+          JULIA_IMAGE_THREADS: 4
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.test()'
         #continue-on-error: ${{ matrix.os == 'macOS-latest' }}
       - name: Copy Config File to Build (Linux)
