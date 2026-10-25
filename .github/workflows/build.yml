@@ -134,9 +134,10 @@ jobs:
           # Same trimmed dependency set as the PackageCompiler build (spreadsheet sync is dev only).
           julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON"]); Pkg.instantiate()'
           rm -rf Build
-          julia -e 'using JuliaC; JuliaC.main(ARGS)' -- --output-exe Battler --project Battler --bundle Build --experimental --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
+          julia -e 'using JuliaC; JuliaC.main(ARGS)' -- --output-exe battler_jc --project Battler --bundle Build --experimental --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
+          # Linked under another name: `Battler` is already the project directory in the repo root.
+          if [ -f Build/bin/battler_jc.exe ]; then mv Build/bin/battler_jc.exe Build/bin/Battler.exe; else mv Build/bin/battler_jc Build/bin/Battler; fi
           ls Build/bin
-          test -f Build/bin/Battler || test -f Build/bin/Battler.exe
       - name: Copy Config File to Build (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: cp ./Battler/config.julgame ./Build
