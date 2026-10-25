@@ -131,7 +131,6 @@ jobs:
           NECRO_DEMO: ${{ inputs.demo }}
         run: |
           set -euo pipefail
-          cp Battler/src/additional_precompile.jl Battler/src/always_precompile.jl
           # Same trimmed dependency set as the PackageCompiler build (spreadsheet sync is dev only).
           julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON"]); Pkg.instantiate()'
           rm -rf Build
