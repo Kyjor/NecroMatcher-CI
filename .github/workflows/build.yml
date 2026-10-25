@@ -33,6 +33,7 @@ jobs:
         with:
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           repository: Kyjor/gmtk-2024
+          ref: speed-up-sysimage
           fetch-depth: 0
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -105,7 +106,7 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Add JulGame.jl Dependency
         working-directory: ./Battler
-        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop")); Pkg.add(PackageSpec(url="https://github.com/Kyjor/PackageCompiler.jl", rev="master"))'
+        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop"))'
       - name: Build Julia Package
         working-directory: ./Battler
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
@@ -118,14 +119,25 @@ jobs:
           sudo mkswap /mnt/swapfile
           sudo swapon /mnt/swapfile
           free -h
-      - name: Run Tests and Build
-        working-directory: ./Battler
+      - name: Install JuliaC
+        run: julia -e 'using Pkg; Pkg.add("JuliaC")'
+      - name: Prepare release asset bundle
+        run: npm --prefix Battler run prepare:release-bundle
+      - name: Build with JuliaC
+        shell: bash
         env:
-          SHOULD_BUILD: true
+          PackageCompiling: "true"
+          SKIP_PRECOMPILE: "false"
           NECRO_DEMO: ${{ inputs.demo }}
-          JULIA_IMAGE_THREADS: 4
-        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.test()'
-        #continue-on-error: ${{ matrix.os == 'macOS-latest' }}
+        run: |
+          set -euo pipefail
+          cp Battler/src/additional_precompile.jl Battler/src/always_precompile.jl
+          # Same trimmed dependency set as the PackageCompiler build (spreadsheet sync is dev only).
+          julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON"]); Pkg.instantiate()'
+          rm -rf Build
+          julia -e 'using JuliaC; JuliaC.main(ARGS)' -- --output-exe Battler --project Battler --bundle Build --experimental --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
+          ls Build/bin
+          test -f Build/bin/Battler || test -f Build/bin/Battler.exe
       - name: Copy Config File to Build (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: cp ./Battler/config.julgame ./Build
