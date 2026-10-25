@@ -129,6 +129,7 @@ jobs:
           PackageCompiling: "true"
           SKIP_PRECOMPILE: "false"
           NECRO_DEMO: ${{ inputs.demo }}
+          JULIA_IMAGE_THREADS: 4
         run: |
           set -euo pipefail
           # Same trimmed dependency set as the PackageCompiler build (spreadsheet sync is dev only).
