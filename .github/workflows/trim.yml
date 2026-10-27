@@ -1,0 +1,14 @@
+name: Trim
+
+on:
+  workflow_dispatch:
+
+jobs:
+  only-trim-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: This workflow runs from the trim branch
+        run: |
+          echo "Select the trim branch. That run builds gmtk battler-trim and JulGame trim-support with juliac --trim=safe and uploads to the Steam branch trimmed."
+          echo "Running it from main does not build or upload."
+          exit 1
