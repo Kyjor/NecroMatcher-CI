@@ -41,12 +41,12 @@ jobs:
             arch: x64
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           repository: Kyjor/gmtk-2024
           ref: ${{ inputs.gmtk_ref }}
-          fetch-depth: 0
+          fetch-depth: ${{ inputs.trim && 1 || 0 }}
       - name: Mark JulGame as a trim build
         if: inputs.trim
         working-directory: ./Battler
@@ -60,8 +60,13 @@ jobs:
       - name: Install Node Dependencies
         working-directory: ./Battler
         run: npm ci
+      - name: Install ffmpeg on Ubuntu
+        if: matrix.os == 'ubuntu-latest' && inputs.trim
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - name: Setup Ubuntu Display (if applicable)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && !inputs.trim
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb libgl1-mesa-dri libglu1-mesa ffmpeg
@@ -72,18 +77,21 @@ jobs:
           echo "SDL_VIDEODRIVER=x11" >> "$GITHUB_ENV"
           echo "SDL_AUDIODRIVER=dummy" >> "$GITHUB_ENV"
       - name: Install PulseAudio on Ubuntu
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && !inputs.trim
         run: |
           sudo apt-get install -y pulseaudio
           pulseaudio --check || pulseaudio --start
           pactl load-module module-null-sink sink_name=vspeaker sink_properties=device.description=virtual_speaker
           pactl load-module module-remap-source master=vspeaker.monitor source_name=vmic source_properties=device.description=virtual_mic
+      - name: Install ffmpeg and OpenSSL on macOS
+        if: matrix.os == 'macOS-latest' && inputs.trim
+        run: brew install ffmpeg openssl@3
       - name: Install BlackHole and ffmpeg on macOS
-        if: matrix.os == 'macOS-latest'
+        if: matrix.os == 'macOS-latest' && !inputs.trim
         run: |
           brew install blackhole-2ch ffmpeg openssl@3
       - name: Install Scream on Windows
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && !inputs.trim
         shell: powershell
         run: |
           Invoke-WebRequest https://github.com/duncanthrax/scream/releases/download/4.0/Scream4.0.zip -OutFile Scream4.0.zip
@@ -95,7 +103,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Sign and Install Scream Driver on Windows
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && !inputs.trim
         shell: powershell
         run: |
           signtool sign /v /fd SHA256 /f ScreamCertificate.pfx Scream\Install\driver\x64\Scream.cat
@@ -105,7 +113,7 @@ jobs:
         timeout-minutes: 5
 
       - name: Start Windows Audio Service
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && !inputs.trim
         run: net start audiosrv
         shell: powershell
         continue-on-error: true
@@ -137,7 +145,15 @@ jobs:
           free -h
       - name: Install JuliaC
         run: julia -e 'using Pkg; Pkg.add("JuliaC")'
+      - name: Restore release asset bundle
+        if: inputs.trim
+        id: bundle-cache
+        uses: actions/cache@v4
+        with:
+          path: Battler/release-bundle
+          key: release-bundle-${{ runner.os }}-${{ hashFiles('Battler/assets/**', 'Battler/tools/prepare-release-bundle.mjs', 'Battler/tools/lib/**') }}
       - name: Prepare release asset bundle
+        if: ${{ !inputs.trim || steps.bundle-cache.outputs.cache-hit != 'true' }}
         run: npm --prefix Battler run prepare:release-bundle
       - name: Build with JuliaC
         shell: bash
