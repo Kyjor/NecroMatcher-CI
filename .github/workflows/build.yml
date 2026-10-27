@@ -7,6 +7,18 @@ on:
         description: Build the demo variant (NECRO_DEMO baked into the app)
         type: boolean
         default: false
+      trim:
+        description: juliac --trim=safe against the trim branches
+        type: boolean
+        default: false
+      gmtk_ref:
+        description: gmtk-2024 branch to build
+        type: string
+        default: speed-up-sysimage
+      julgame_rev:
+        description: JulGame.jl branch to build
+        type: string
+        default: develop
 
 jobs:
   test:
@@ -33,8 +45,12 @@ jobs:
         with:
           ssh-key: ${{ secrets.PRIVATE_SSH_KEY }}
           repository: Kyjor/gmtk-2024
-          ref: speed-up-sysimage
+          ref: ${{ inputs.gmtk_ref }}
           fetch-depth: 0
+      - name: Mark JulGame as a trim build
+        if: inputs.trim
+        working-directory: ./Battler
+        run: printf '[JulGame]\ntrim = true\n' > LocalPreferences.toml
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -106,7 +122,7 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Add JulGame.jl Dependency
         working-directory: ./Battler
-        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="develop"))'
+        run: julia -e 'using Pkg; Pkg.activate("."); Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="${{ inputs.julgame_rev }}"))'
       - name: Build Julia Package
         working-directory: ./Battler
         run: julia -e 'using Pkg; Pkg.activate("."); Pkg.build()'
@@ -132,10 +148,17 @@ jobs:
           JULIA_IMAGE_THREADS: 4
         run: |
           set -euo pipefail
-          # Same trimmed dependency set as the PackageCompiler build (spreadsheet sync is dev only).
-          julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON"]); Pkg.instantiate()'
+          # Spreadsheet sync is dev only. HTTP cannot be compiled by juliac --trim.
+          if [ "${{ inputs.trim }}" = "true" ]; then
+            export ALWAYS_PRECOMPILE=false
+            julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON", "HTTP"]); Pkg.instantiate()'
+            set -- --output-exe battler_jc --project Battler --bundle Build --experimental --trim=safe --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
+          else
+            julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON"]); Pkg.instantiate()'
+            set -- --output-exe battler_jc --project Battler --bundle Build --experimental --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
+          fi
           rm -rf Build
-          julia -e 'using JuliaC; JuliaC.main(ARGS)' -- --output-exe battler_jc --project Battler --bundle Build --experimental --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
+          julia -e 'using JuliaC; JuliaC.main(ARGS)' -- "$@"
           # Linked under another name: `Battler` is already the project directory in the repo root.
           if [ -f Build/bin/battler_jc.exe ]; then mv Build/bin/battler_jc.exe Build/bin/Battler.exe; else mv Build/bin/battler_jc Build/bin/Battler; fi
           ls Build/bin
@@ -209,7 +232,7 @@ jobs:
           /usr/bin/ditto -c -k --keepParent Battler.app Battler.app.zip
 
       - name: Encrypt artifact (Linux)
-        if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
+        if: matrix.os == 'ubuntu-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         shell: bash
         env:
           ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
@@ -219,7 +242,7 @@ jobs:
           mkdir -p EncryptedArtifact
           tar -C Build -czf - . | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Linux)
-        if: matrix.os == 'ubuntu-latest' && github.ref_name == 'main'
+        if: matrix.os == 'ubuntu-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         uses: actions/upload-artifact@v4
         with:
             name: ${{ env.ARTIFACT_PREFIX }}-Linux
@@ -227,14 +250,14 @@ jobs:
             retention-days: 1
             compression-level: 0
       - name: Package Mac artifact
-        if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
+        if: matrix.os == 'macOS-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         run: |
           mkdir -p MacArtifact
           # ditto zip keeps Julia dylib symlinks. upload-artifact of the .app
           # folder follows them and ships two copies of libjulia-internal.
           cp -f Battler.app.zip MacArtifact/Battler.app.zip
       - name: Encrypt artifact (Mac)
-        if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
+        if: matrix.os == 'macOS-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         shell: bash
         env:
           ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
@@ -246,7 +269,7 @@ jobs:
           mkdir -p EncryptedArtifact
           tar -C MacArtifact -czf - . | "$OPENSSL" enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Mac)
-        if: matrix.os == 'macOS-latest' && github.ref_name == 'main'
+        if: matrix.os == 'macOS-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         uses: actions/upload-artifact@v4
         with:
             name: ${{ env.ARTIFACT_PREFIX }}-Mac
@@ -254,7 +277,7 @@ jobs:
             retention-days: 1
             compression-level: 0
       - name: Encrypt artifact (Windows)
-        if: matrix.os == 'windows-latest' && github.ref_name == 'main'
+        if: matrix.os == 'windows-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         shell: bash
         env:
           ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
@@ -264,7 +287,7 @@ jobs:
           mkdir -p EncryptedArtifact
           tar -C Build -czf - . | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Windows)
-        if: matrix.os == 'windows-latest' && github.ref_name == 'main'
+        if: matrix.os == 'windows-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         uses: actions/upload-artifact@v4
         with:
             name: ${{ env.ARTIFACT_PREFIX }}-Windows

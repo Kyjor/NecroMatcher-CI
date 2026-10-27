@@ -1,0 +1,116 @@
+name: Trim
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Trim
+    uses: ./.github/workflows/build.yml
+    with:
+      demo: false
+      trim: true
+      gmtk_ref: battler-trim
+      julgame_rev: trim-support
+    secrets: inherit
+
+  deploy-to-steam:
+    name: Deploy trimmed build to Steam
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref_name == 'trim'
+    steps:
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Windows
+          path: ./BuildWindows
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Linux
+          path: ./BuildLinux
+      - name: Download Mac Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NecroMatcher-Mac
+          path: ./BuildMac
+      - name: Decrypt artifacts
+        env:
+          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ENCRYPTION_KEY"
+          found=0
+          for dir in BuildWindows BuildLinux BuildMac; do
+            if [ ! -d "$dir" ]; then
+              continue
+            fi
+            found=1
+            if [ ! -f "$dir/payload.enc" ]; then
+              echo "Missing encrypted payload in $dir" >&2
+              exit 1
+            fi
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+              -in "$dir/payload.enc" \
+              -out "$dir/payload.tar.gz" \
+              -pass env:ARTIFACT_ENCRYPTION_KEY
+            tar -xzf "$dir/payload.tar.gz" -C "$dir"
+            rm -f "$dir/payload.enc" "$dir/payload.tar.gz"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No artifacts to decrypt" >&2
+            exit 1
+          fi
+      - name: Unpack Mac app
+        run: |
+          python3 - <<'PY'
+          import hashlib, stat, zipfile
+          from collections import defaultdict
+          from pathlib import Path
+          zpath = Path("BuildMac/Battler.app.zip")
+          out = Path("BuildMac")
+          with zipfile.ZipFile(zpath) as z:
+              for info in z.infolist():
+                  dest = out / info.filename
+                  mode = info.external_attr >> 16
+                  if info.is_dir() or info.filename.endswith("/"):
+                      dest.mkdir(parents=True, exist_ok=True)
+                      continue
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  if stat.S_ISLNK(mode):
+                      dest.symlink_to(z.read(info).decode())
+                      continue
+                  dest.write_bytes(z.read(info))
+                  if mode:
+                      dest.chmod(mode & 0o777)
+          zpath.unlink()
+          lib = next(out.rglob("Build/lib"), None)
+          if lib is not None:
+              groups = defaultdict(list)
+              for p in lib.rglob("*.dylib"):
+                  if p.is_symlink() or not p.is_file():
+                      continue
+                  groups[hashlib.sha256(p.read_bytes()).hexdigest()].append(p)
+              for ps in groups.values():
+                  if len(ps) < 2 or len({p.parent for p in ps}) != 1:
+                      continue
+                  ps.sort(key=lambda p: (len(p.name), p.name))
+                  keep = ps[0]
+                  for p in ps[1:]:
+                      p.unlink()
+                      p.symlink_to(keep.name)
+          print("unpacked", [p.name for p in out.iterdir()])
+          PY
+      - name: Deploy to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1410040
+          buildDescription: trimmed
+          rootPath: ./
+          depot1Path: BuildWindows
+          depot2Path: BuildMac
+          depot3Path: BuildLinux
+          releaseBranch: trimmed
