@@ -152,6 +152,49 @@ jobs:
           if [ "${{ inputs.trim }}" = "true" ]; then
             export ALWAYS_PRECOMPILE=false
             julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON", "HTTP"]); Pkg.instantiate()'
+            # Linux JLL __init__ does joinpath(dir, parts...), and that splat is not trimmable.
+            if [ "$(uname -s)" = "Linux" ]; then
+              python3 - <<'PY'
+          import os, re, stat
+          root = os.path.expanduser("~/.julia/packages")
+          assign = re.compile(r"global (\w+) = normpath\(joinpath\(artifact_dir, (\w+)\.\.\.\)\)")
+          const_re = re.compile(r"const (\w+) = \[([^\]]*)\]")
+          nfiles = 0
+          for dirpath, _, files in os.walk(root):
+              for fn in files:
+                  if not fn.endswith("-linux-gnu.jl"):
+                      continue
+                  path = os.path.join(dirpath, fn)
+                  text = open(path, encoding="utf-8").read()
+                  if "splitpath..." not in text:
+                      continue
+                  counts = {}
+                  for m in const_re.finditer(text):
+                      counts[m.group(1)] = len(re.findall(r'"[^"]*"', m.group(2)))
+                  names = []
+                  def repl(m, names=names, counts=counts):
+                      name, parts = m.group(1), m.group(2)
+                      n = counts.get(parts, 0)
+                      if n < 1:
+                          return m.group(0)
+                      expr = "artifact_dir"
+                      for i in range(1, n + 1):
+                          expr = f"joinpath({expr}, {parts}[{i}])"
+                      names.append(name)
+                      return f"_trim_{name} = normpath({expr})\n    global {name} = _trim_{name}"
+                  new = assign.sub(repl, text)
+                  for name in names:
+                      new = new.replace(f"dlopen({name})", f"dlopen(_trim_{name})")
+                      new = new.replace(f"dirname({name})", f"dirname(_trim_{name})")
+                  if new == text:
+                      continue
+                  os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+                  open(path, "w", encoding="utf-8").write(new)
+                  nfiles += 1
+                  print("patched", path)
+          print("jll trim patches", nfiles)
+          PY
+            fi
             set -- --output-exe battler_jc --project Battler --bundle Build --experimental --trim=safe --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
           else
             julia --project=Battler -e 'using Pkg; Pkg.rm(["GameDataManager", "XLSX", "JSON"]); Pkg.instantiate()'
