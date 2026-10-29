@@ -157,13 +157,15 @@ jobs:
             cp "$HOME/.julia/battler-env/Manifest.toml" Battler/Manifest.toml
           else
             # Spreadsheet sync is dev only. HTTP cannot be compiled by juliac --trim.
+            # Swap `Add` then `rm`: `Battler/Manifest.toml` is not committed, so `Pkg.rm` before `Pkg.add`
+            # throws because there is no manifest yet, leaving `GameDataManager`/`XLSX`/`JSON`/`HTTP` in Project.toml!
             if [ "${{ inputs.trim }}" = "true" ]; then
               JULIA_PKG_PRECOMPILE_AUTO=0 julia -e '
                 using Pkg
                 Pkg.add("JuliaC")
                 Pkg.activate("Battler")
-                try Pkg.rm(["GameDataManager", "XLSX", "JSON", "HTTP"]) catch end
                 Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="${{ steps.julgame-sha.outputs.sha }}"))
+                Pkg.rm(["GameDataManager", "XLSX", "JSON", "HTTP"])
                 Pkg.instantiate()
               '
               # Linux JLL __init__ does joinpath(dir, parts...), and that splat is not trimmable.
@@ -223,8 +225,8 @@ jobs:
                 using Pkg
                 Pkg.add("JuliaC")
                 Pkg.activate("Battler")
-                try Pkg.rm(["GameDataManager", "XLSX", "JSON"]) catch end
                 Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="${{ steps.julgame-sha.outputs.sha }}"))
+                Pkg.rm(["GameDataManager", "XLSX", "JSON"])
                 Pkg.instantiate()
               '
             fi
