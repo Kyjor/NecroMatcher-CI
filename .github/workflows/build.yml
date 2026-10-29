@@ -100,7 +100,25 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v2
+      - name: Resolve JulGame commit SHA
+        id: julgame-sha
+        shell: bash
+        run: |
+          SHA=$(git ls-remote https://github.com/Kyjor/JulGame.jl.git "${{ inputs.julgame_rev }}" | head -n1 | cut -f1)
+          if [ -z "$SHA" ]; then
+            SHA="${{ inputs.julgame_rev }}"
+          fi
+          echo "Resolved JulGame (${{ inputs.julgame_rev }}) -> $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Cache Julia depot and resolved environment
+        id: julia-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.julia
+          key: julia-env-v1-${{ runner.os }}-${{ matrix.version }}-${{ inputs.trim }}-${{ hashFiles('Battler/Project.toml', 'Battler/Manifest.toml') }}-${{ steps.julgame-sha.outputs.sha }}
+          restore-keys: |
+            julia-env-v1-${{ runner.os }}-${{ matrix.version }}-${{ inputs.trim }}-${{ hashFiles('Battler/Project.toml', 'Battler/Manifest.toml') }}-
+            julia-env-v1-${{ runner.os }}-${{ matrix.version }}-${{ inputs.trim }}-
       - name: Add swap on Ubuntu (sysimage build can exceed RAM)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -130,21 +148,28 @@ jobs:
           JULIA_NUM_PRECOMPILE_TASKS: 4
         run: |
           set -euo pipefail
-          # Resolve packages once without auto-precompiling dev-only packages that get removed right after.
           if [ "${{ inputs.trim }}" = "true" ]; then
             export ALWAYS_PRECOMPILE=false
-            JULIA_PKG_PRECOMPILE_AUTO=0 julia -e '
-              using Pkg
-              Pkg.add("JuliaC")
-              Pkg.activate("Battler")
-              try Pkg.rm(["GameDataManager", "XLSX", "JSON", "HTTP"]) catch end
-              Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="${{ inputs.julgame_rev }}"))
-              Pkg.instantiate()
-            '
-            # Linux JLL __init__ does joinpath(dir, parts...), and that splat is not trimmable.
-            # Patch before precompilation so JLLs are not compiled twice.
-            if [ "$(uname -s)" = "Linux" ]; then
-              python3 - <<'PY'
+          fi
+          if [ "${{ steps.julia-cache.outputs.cache-hit }}" = "true" ] && [ -f "$HOME/.julia/battler-env/Manifest.toml" ]; then
+            echo "Restoring cached Battler Project.toml and Manifest.toml"
+            cp "$HOME/.julia/battler-env/Project.toml" Battler/Project.toml
+            cp "$HOME/.julia/battler-env/Manifest.toml" Battler/Manifest.toml
+          else
+            # Spreadsheet sync is dev only. HTTP cannot be compiled by juliac --trim.
+            if [ "${{ inputs.trim }}" = "true" ]; then
+              JULIA_PKG_PRECOMPILE_AUTO=0 julia -e '
+                using Pkg
+                Pkg.add("JuliaC")
+                Pkg.activate("Battler")
+                try Pkg.rm(["GameDataManager", "XLSX", "JSON", "HTTP"]) catch end
+                Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="${{ steps.julgame-sha.outputs.sha }}"))
+                Pkg.instantiate()
+              '
+              # Linux JLL __init__ does joinpath(dir, parts...), and that splat is not trimmable.
+              # Patch before precompilation so JLLs are not compiled twice.
+              if [ "$(uname -s)" = "Linux" ]; then
+                python3 - <<'PY'
           import os, re, stat
           root = os.path.expanduser("~/.julia/packages")
           assign = re.compile(r"global (\w+) = normpath\(joinpath\(artifact_dir, (\w+)\.\.\.\)\)")
@@ -156,7 +181,7 @@ jobs:
                       continue
                   path = os.path.join(dirpath, fn)
                   text = open(path, encoding="utf-8").read()
-                  if "splitpath..." not in text:
+                  if "splitpath..." not in text or "_trim_artifact_dir" in text:
                       continue
                   counts = {}
                   for m in const_re.finditer(text):
@@ -192,17 +217,26 @@ jobs:
                   print("patched", path)
           print("jll trim patches", nfiles)
           PY
+              fi
+            else
+              JULIA_PKG_PRECOMPILE_AUTO=0 julia -e '
+                using Pkg
+                Pkg.add("JuliaC")
+                Pkg.activate("Battler")
+                try Pkg.rm(["GameDataManager", "XLSX", "JSON"]) catch end
+                Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="${{ steps.julgame-sha.outputs.sha }}"))
+                Pkg.instantiate()
+              '
             fi
+            mkdir -p "$HOME/.julia/battler-env"
+            cp Battler/Project.toml "$HOME/.julia/battler-env/Project.toml"
+            cp Battler/Manifest.toml "$HOME/.julia/battler-env/Manifest.toml"
+          fi
+          # Always recompile Battler itself so NECRO_DEMO and latest Battler assets/code are baked fresh.
+          rm -rf "$HOME"/.julia/compiled/*/Battler
+          if [ "${{ inputs.trim }}" = "true" ]; then
             set -- --output-exe battler_jc --project Battler --bundle Build --experimental --trim=safe --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
           else
-            JULIA_PKG_PRECOMPILE_AUTO=0 julia -e '
-              using Pkg
-              Pkg.add("JuliaC")
-              Pkg.activate("Battler")
-              try Pkg.rm(["GameDataManager", "XLSX", "JSON"]) catch end
-              Pkg.add(PackageSpec(url="https://github.com/Kyjor/JulGame.jl", rev="${{ inputs.julgame_rev }}"))
-              Pkg.instantiate()
-            '
             set -- --output-exe battler_jc --project Battler --bundle Build --experimental --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
           fi
           rm -rf Build
