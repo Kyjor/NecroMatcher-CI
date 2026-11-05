@@ -257,6 +257,14 @@ jobs:
             cp ./Battler/libsteam_api.dylib ./Build/bin/
           elif [ "${{ matrix.os }}" = "windows-latest" ]; then
             cp ./Battler/steam_api64.dll ./Build/bin/
+            # Analytics posts through libcurl. The trimmed exe does not ship Julia's Downloads JLL,
+            # so copy the DLLs that sit next to julia.exe.
+            JULIA_BIN="$(cygpath -u "$(dirname "$(command -v julia)")")"
+            for dll in libcurl-4.dll libcurl.dll libssh2.dll zlib.dll libz.dll nghttp2.dll libssl-3-x64.dll libcrypto-3-x64.dll; do
+              if [ -f "$JULIA_BIN/$dll" ]; then
+                cp "$JULIA_BIN/$dll" ./Build/bin/
+              fi
+            done
           fi
           if [ "${{ inputs.demo }}" = "true" ]; then
             printf '4623610' > ./Build/bin/steam_appid.txt
