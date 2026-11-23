@@ -237,6 +237,43 @@ jobs:
           fi
           # Always recompile Battler itself so NECRO_DEMO and latest Battler assets/code are baked fresh.
           rm -rf "$HOME"/.julia/compiled/*/Battler
+          # LazyJLLWrappers eager_mode() calls dlopen(::LazyLibrary). That path field is
+          # untyped, so juliac --trim refuses it. Same for __init__'s string(lazy_path).
+          # Linux-only: PulseAudio/Readline/Ncurses are the JLLs that hit this.
+          if [ "${{ inputs.trim }}" = "true" ] && [ "$(uname -s)" = "Linux" ]; then
+            python3 - <<'PY'
+          import pathlib, stat
+          root = pathlib.Path.home() / ".julia" / "packages" / "LazyJLLWrappers"
+          old_dlopen = "push!(statements, :(dlopen($(use_lazy_libraries() ? var_name : path_var_name))))"
+          new_dlopen = """push!(statements, :(dlopen($(path_var_name))))
+                  cb = get(lib, "on_load_callback", nothing)
+                  if cb !== nothing
+                      push!(statements, :($(Symbol(cb))()))
+                  end"""
+          old_string = "push!(jb.init_blocks, :(global $(path_var_name) = string($(lazy_path_var_name))))"
+          new_string = 'push!(jb.init_blocks, :(global $(path_var_name) = joinpath(artifact_path($(treehash)), $(product["path"]))))'
+          n = 0
+          for path in root.glob("*/src/GeneratorUtils.jl"):
+              text = path.read_text(encoding="utf-8")
+              changed = text
+              if old_dlopen in changed:
+                  changed = changed.replace(old_dlopen, new_dlopen, 1)
+              if old_string in changed:
+                  changed = changed.replace(old_string, new_string, 1)
+              if changed == text:
+                  print("lazy jll already patched", path)
+                  continue
+              path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+              path.write_text(changed, encoding="utf-8")
+              n += 1
+              print("patched", path)
+          print("lazy jll trim patches", n)
+          PY
+            rm -rf "$HOME"/.julia/compiled/*/LazyJLLWrappers
+            if [ -d "$HOME/.julia/compiled" ]; then
+              find "$HOME/.julia/compiled" -mindepth 2 -maxdepth 2 -type d -name '*_jll' -exec rm -rf {} +
+            fi
+          fi
           if [ "${{ inputs.trim }}" = "true" ]; then
             set -- --output-exe battler_jc --project Battler --bundle Build --experimental --trim=safe --jl-option threads=4 --verbose Battler/src/juliac_entry.jl
           else
