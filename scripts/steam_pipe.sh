@@ -215,7 +215,7 @@ PY
       mkdir -p "$dest"
       dlog="$work/download-${depot}.log"
       run_steamcmd "$dlog" +download_depot "$app_id" "$depot" "$gid" 0 "$dest" || true
-      if ! grep -q "DownloadDepot success" "$dlog"; then
+      if ! grep -q "Depot download complete" "$dlog"; then
         echo "failed to download depot ${depot} manifest ${gid}" >&2
         tail -n 80 "$dlog" >&2
         exit 1
