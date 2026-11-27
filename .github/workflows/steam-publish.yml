@@ -1,0 +1,64 @@
+name: Publish Steam manifests
+
+on:
+  workflow_dispatch:
+    inputs:
+      full_windows:
+        description: Full game Windows manifest id
+        required: true
+        type: string
+      full_macos:
+        description: Full game macOS manifest id
+        required: true
+        type: string
+      full_linux:
+        description: Full game Linux manifest id
+        required: true
+        type: string
+      demo_windows:
+        description: Demo Windows manifest id
+        required: true
+        type: string
+      demo_macos:
+        description: Demo macOS manifest id
+        required: true
+        type: string
+      demo_linux:
+        description: Demo Linux manifest id
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish full and demo
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_CONFIG_VDF: ${{ secrets.STEAM_CONFIG_VDF }}
+          STEAM_BRANCH: trimmed
+          FULL_WINDOWS: ${{ inputs.full_windows }}
+          FULL_MACOS: ${{ inputs.full_macos }}
+          FULL_LINUX: ${{ inputs.full_linux }}
+          DEMO_WINDOWS: ${{ inputs.demo_windows }}
+          DEMO_MACOS: ${{ inputs.demo_macos }}
+          DEMO_LINUX: ${{ inputs.demo_linux }}
+        run: |
+          set -euo pipefail
+          publish() {
+            local app_id="$1" desc="$2" win="$3" mac="$4" lin="$5" dir="$6"
+            mkdir -p "$dir"
+            printf '%s %s\n' "$((app_id + 1))" "$win" > "$dir/windows.txt"
+            printf '%s %s\n' "$((app_id + 2))" "$mac" > "$dir/macos.txt"
+            printf '%s %s\n' "$((app_id + 3))" "$lin" > "$dir/linux.txt"
+            # steam_pipe.sh looks for files named manifest.txt
+            mkdir -p "$dir/windows" "$dir/macos" "$dir/linux"
+            mv "$dir/windows.txt" "$dir/windows/manifest.txt"
+            mv "$dir/macos.txt" "$dir/macos/manifest.txt"
+            mv "$dir/linux.txt" "$dir/linux/manifest.txt"
+            STEAM_APP_ID="$app_id" STEAM_BUILD_DESC="$desc" STEAM_MANIFESTS_DIR="$dir" \
+              bash scripts/steam_pipe.sh publish
+          }
+          publish 1410040 trimmed "$FULL_WINDOWS" "$FULL_MACOS" "$FULL_LINUX" manifests-full
+          publish 4623610 "trimmed demo" "$DEMO_WINDOWS" "$DEMO_MACOS" "$DEMO_LINUX" manifests-demo

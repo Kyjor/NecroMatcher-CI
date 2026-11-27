@@ -93,7 +93,6 @@ from pathlib import Path
 depot, output, log = sys.argv[1:]
 root = Path(output)
 file_gids = []
-quoted = []
 text = Path(log).read_text(errors="ignore")
 if root.is_dir():
     for path in root.rglob("*"):
@@ -104,15 +103,16 @@ if root.is_dir():
             file_gids.append(match.group(1))
         if path.suffix in {".vdf", ".log"} or path.name == Path(log).name:
             text += "\n" + path.read_text(errors="ignore")
-# steamcmd writes `manifest 123…` or `"manifest" "123…"` with no extra word.
-for line in text.splitlines():
-    if depot not in line and "manifest" not in line.lower():
-        continue
-    quoted += re.findall(r'manifest(?:\s*id|\s*gid)?["\s:=]*(\d{10,})', line, flags=re.I)
+# "New manifestID 123" is the id steamcmd just created. "baselinemanifest"
+# is the previous one and must not be selected.
+created = re.findall(r"New manifestID\s+(\d{10,})", text, flags=re.I)
+exact = re.findall(r'(?<![A-Za-z])"manifest"\s+"(\d{10,})"', text, flags=re.I)
 if file_gids:
     print(file_gids[-1])
-elif len(set(quoted)) == 1:
-    print(quoted[0])
+elif created:
+    print(created[-1])
+elif exact:
+    print(exact[-1])
 else:
     print("")
 PY
