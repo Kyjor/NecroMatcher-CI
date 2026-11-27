@@ -108,7 +108,7 @@ if root.is_dir():
 for line in text.splitlines():
     if depot not in line and "manifest" not in line.lower():
         continue
-    quoted += re.findall(r'manifest(?:\s*id|\s*gid)?\s*[:=]?\s*"?(\d{10,})"?', line, flags=re.I)
+    quoted += re.findall(r'manifest(?:\s*id|\s*gid)?["\s:=]*(\d{10,})', line, flags=re.I)
 if file_gids:
     print(file_gids[-1])
 elif len(set(quoted)) == 1:
