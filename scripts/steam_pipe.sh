@@ -191,50 +191,83 @@ PY
     manifests="${STEAM_MANIFESTS_DIR:?}"
     work="${RUNNER_TEMP:-/tmp}/steampipe-publish"
     rm -rf "$work"
-    mkdir -p "$work/output"
-    python3 - "$work/app_build.vdf" "$app_id" "$desc" "$branch" "$work/output" "$manifests" <<'PY'
+    mkdir -p "$work/output" "$work/content"
+    python3 - "$manifests" > "$work/depots.txt" <<'PY'
 import sys
 from pathlib import Path
-vdf, app, desc, branch, output, manifests = sys.argv[1:]
 rows = []
-for path in sorted(Path(manifests).rglob("manifest.txt")):
+for path in sorted(Path(sys.argv[1]).rglob("manifest.txt")):
     depot, gid = path.read_text(encoding="utf-8").split()
     if not depot.isdigit() or not gid.isdigit():
         raise SystemExit(f"bad manifest file {path}")
     rows.append((depot, gid))
 if len(rows) != 3:
     raise SystemExit(f"expected 3 depot manifests, found {len(rows)}")
+for depot, gid in rows:
+    print(depot, gid)
+PY
+    install_steamcmd
+    write_config
+    # steamcmd will not attach a manifest id by itself. Download the depot
+    # that was already uploaded, then publish those files as one app build.
+    while read -r depot gid; do
+      dest="$work/content/$depot"
+      mkdir -p "$dest"
+      dlog="$work/download-${depot}.log"
+      run_steamcmd "$dlog" +download_depot "$app_id" "$depot" "$gid" 0 "$dest" || true
+      if ! grep -q "DownloadDepot success" "$dlog"; then
+        echo "failed to download depot ${depot} manifest ${gid}" >&2
+        tail -n 80 "$dlog" >&2
+        exit 1
+      fi
+      files="$(find "$dest" -type f | wc -l)"
+      if [ "$files" -lt 10 ]; then
+        echo "depot ${depot} downloaded ${files} files" >&2
+        exit 1
+      fi
+      echo "depot ${depot} downloaded ${files} files"
+    done < "$work/depots.txt"
+    python3 - "$work/app_build.vdf" "$app_id" "$desc" "$branch" "$work/output" "$work/content" "$work/depots.txt" <<'PY'
+import sys
+from pathlib import Path
+vdf, app, desc, branch, output, content, depots_txt = sys.argv[1:]
 def q(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
-# A depot subsection is built from files. A string is a script path, and that
-# script's "manifest" key is the already-uploaded manifest id.
 vdf_dir = Path(vdf).parent
-names = []
-for depot, gid in rows:
+lines = []
+for line in Path(depots_txt).read_text(encoding="utf-8").splitlines():
+    depot = line.split()[0]
     name = f"depot_{depot}.vdf"
-    (vdf_dir / name).write_text(
-        f'"depotbuild"\n{{\n  "DepotID" "{q(depot)}"\n  "manifest" "{q(gid)}"\n}}\n',
-        encoding="utf-8",
-    )
-    names.append((depot, name))
-depots = "\n".join(f'    "{q(depot)}" "{q(name)}"' for depot, name in names)
+    root = str(Path(content) / depot)
+    (vdf_dir / name).write_text(f'''"DepotBuildConfig"
+{{
+  "DepotID" "{q(depot)}"
+  "ContentRoot" "{q(root)}"
+  "FileMapping"
+  {{
+    "LocalPath" "*"
+    "DepotPath" "."
+    "recursive" "1"
+  }}
+  "FileExclusion" "*.pdb"
+}}
+''', encoding="utf-8")
+    lines.append(f'    "{q(depot)}" "{q(name)}"')
 Path(vdf).write_text(f'''"AppBuild"
 {{
   "AppID" "{q(app)}"
   "Desc" "{q(desc)}"
-  "ContentRoot" ""
+  "ContentRoot" "{q(output)}"
   "BuildOutput" "{q(output)}"
   "SetLive" "{q(branch)}"
   "Depots"
   {{
-{depots}
+{chr(10).join(lines)}
   }}
 }}
 ''', encoding="utf-8")
 print(Path(vdf).read_text(encoding="utf-8"))
 PY
-    install_steamcmd
-    write_config
     log="$work/steamcmd.log"
     run_steamcmd "$log" +run_app_build "$work/app_build.vdf" || true
     if ! finished "$app_id" "$log" || grep -q "empty depot" "$log"; then
