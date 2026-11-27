@@ -206,7 +206,16 @@ if len(rows) != 3:
     raise SystemExit(f"expected 3 depot manifests, found {len(rows)}")
 def q(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
-depots = "\n".join(f'    "{q(depot)}" "{q(gid)}"' for depot, gid in rows)
+# A bare string is a path to a depot script. The manifest id has to be a key
+# or steamcmd looks for a file named after the id.
+depots = "\n".join(
+    f'''    "{q(depot)}"
+    {{
+      "DepotID" "{q(depot)}"
+      "manifest" "{q(gid)}"
+    }}'''
+    for depot, gid in rows
+)
 Path(vdf).write_text(f'''"AppBuild"
 {{
   "AppID" "{q(app)}"

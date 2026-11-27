@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'CI workflow run ID that produced NecroMatcher-Linux / NecroMatcher-Windows artifacts'
+        description: 'Trim run whose steam-manifest-* artifacts should be set live'
         required: true
         type: string
       targets:
-        description: 'Platforms to deploy to Steam'
+        description: 'Unused. Full and demo are both published.'
         required: true
         type: choice
         options:
@@ -18,91 +18,32 @@ on:
         default: both
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download Windows Artifact
-        if: inputs.targets == 'both' || inputs.targets == 'windows'
+      - uses: actions/checkout@v4
+      - name: Download full manifests
         uses: actions/download-artifact@v4
         with:
-          name: NecroMatcher-Windows
-          path: ./BuildWindows
+          pattern: steam-manifest-full-*
+          path: manifests-full
           run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download Linux Artifact
-        if: inputs.targets == 'both' || inputs.targets == 'linux'
+      - name: Download demo manifests
         uses: actions/download-artifact@v4
         with:
-          name: NecroMatcher-Linux
-          path: ./BuildLinux
+          pattern: steam-manifest-demo-*
+          path: manifests-demo
           run-id: ${{ inputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Decrypt artifacts
+      - name: Publish full and demo
         env:
-          ARTIFACT_ENCRYPTION_KEY: ${{ secrets.ARTIFACT_ENCRYPTION_KEY }}
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_CONFIG_VDF: ${{ secrets.STEAM_CONFIG_VDF }}
+          STEAM_BRANCH: trimmed
         run: |
           set -euo pipefail
-          test -n "$ARTIFACT_ENCRYPTION_KEY"
-          found=0
-          for dir in BuildWindows BuildLinux; do
-            if [ ! -d "$dir" ]; then
-              continue
-            fi
-            found=1
-            if [ ! -f "$dir/payload.enc" ]; then
-              echo "Missing encrypted payload in $dir" >&2
-              exit 1
-            fi
-            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
-              -in "$dir/payload.enc" \
-              -out "$dir/payload.tar.gz" \
-              -pass env:ARTIFACT_ENCRYPTION_KEY
-            tar -xzf "$dir/payload.tar.gz" -C "$dir"
-            rm -f "$dir/payload.enc" "$dir/payload.tar.gz"
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "No artifacts to decrypt" >&2
-            exit 1
-          fi
-
-      - name: Deploy to Steam (Windows + Linux)
-        if: inputs.targets == 'both'
-        uses: game-ci/steam-deploy@v3
-        with:
-          username: ${{ secrets.STEAM_USERNAME }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
-          appId: 1410040
-          buildDescription: v0.1.0
-          rootPath: ./
-          depot1Path: BuildWindows
-          depot3Path: BuildLinux
-          releaseBranch: testing
-
-      # Demo uploads live in steam-demo-deploy.yml so each Steam deploy gets a fresh workspace.
-
-      - name: Deploy to Steam (Windows only)
-        if: inputs.targets == 'windows'
-        uses: game-ci/steam-deploy@v3
-        with:
-          username: ${{ secrets.STEAM_USERNAME }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
-          appId: 1410040
-          buildDescription: v0.1.0
-          rootPath: ./
-          depot1Path: BuildWindows
-          releaseBranch: testing
-
-      - name: Deploy to Steam (Linux only)
-        if: inputs.targets == 'linux'
-        uses: game-ci/steam-deploy@v3
-        with:
-          username: ${{ secrets.STEAM_USERNAME }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
-          appId: 1410040
-          buildDescription: v0.1.0
-          rootPath: ./
-          depot3Path: BuildLinux
-          releaseBranch: testing
+          STEAM_APP_ID=1410040 STEAM_BUILD_DESC=trimmed STEAM_MANIFESTS_DIR=manifests-full \
+            bash scripts/steam_pipe.sh publish
+          STEAM_APP_ID=4623610 STEAM_BUILD_DESC="trimmed demo" STEAM_MANIFESTS_DIR=manifests-demo \
+            bash scripts/steam_pipe.sh publish
