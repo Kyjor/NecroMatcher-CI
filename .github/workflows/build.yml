@@ -239,9 +239,10 @@ jobs:
           rm -rf "$HOME"/.julia/compiled/*/Battler
           # LazyJLLWrappers eager_mode() calls dlopen(::LazyLibrary). That path field is
           # untyped, so juliac --trim refuses it. Same for __init__'s string(lazy_path).
-          # Linux-only: PulseAudio/Readline/Ncurses are the JLLs that hit this.
-          if [ "${{ inputs.trim }}" = "true" ] && [ "$(uname -s)" = "Linux" ]; then
-            python3 - <<'PY'
+          # FreeType pulls this in on Windows and macOS; PulseAudio/Readline do on Linux.
+          if [ "${{ inputs.trim }}" = "true" ]; then
+            if command -v python3 >/dev/null 2>&1; then PYTHON=python3; else PYTHON=python; fi
+            "$PYTHON" - <<'PY'
           import pathlib, stat
           root = pathlib.Path.home() / ".julia" / "packages" / "LazyJLLWrappers"
           old_dlopen = "push!(statements, :(dlopen($(use_lazy_libraries() ? var_name : path_var_name))))"
@@ -355,6 +356,7 @@ jobs:
           set -euo pipefail
           test -n "$ARTIFACT_ENCRYPTION_KEY"
           mkdir -p EncryptedArtifact
+          julia -e 'include("Battler/tools/flatten_depot_tree.jl"); flatten_depot_tree!("Build")'
           GZIP=-1 tar -C Build -czf - . | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Linux)
         if: matrix.os == 'ubuntu-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
@@ -396,7 +398,8 @@ jobs:
           set -euo pipefail
           test -n "$ARTIFACT_ENCRYPTION_KEY"
           mkdir -p EncryptedArtifact
-          GZIP=-1 tar -C Build -czf - . | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
+          julia -e 'include("Battler/tools/flatten_depot_tree.jl"); flatten_depot_tree!("Build")'
+          GZIP=-1 tar -C Build -h -czf - . | openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -out EncryptedArtifact/payload.enc -pass env:ARTIFACT_ENCRYPTION_KEY
       - name: Upload Artifact (Windows)
         if: matrix.os == 'windows-latest' && (github.ref_name == 'main' || (inputs.trim && github.ref_name == 'trim'))
         uses: actions/upload-artifact@v4
