@@ -206,21 +206,23 @@ if len(rows) != 3:
     raise SystemExit(f"expected 3 depot manifests, found {len(rows)}")
 def q(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
-# A bare string is a path to a depot script. The manifest id has to be a key
-# or steamcmd looks for a file named after the id.
-depots = "\n".join(
-    f'''    "{q(depot)}"
-    {{
-      "DepotID" "{q(depot)}"
-      "manifest" "{q(gid)}"
-    }}'''
-    for depot, gid in rows
-)
+# A depot subsection is built from files. A string is a script path, and that
+# script's "manifest" key is the already-uploaded manifest id.
+vdf_dir = Path(vdf).parent
+names = []
+for depot, gid in rows:
+    name = f"depot_{depot}.vdf"
+    (vdf_dir / name).write_text(
+        f'"depotbuild"\n{{\n  "DepotID" "{q(depot)}"\n  "manifest" "{q(gid)}"\n}}\n',
+        encoding="utf-8",
+    )
+    names.append((depot, name))
+depots = "\n".join(f'    "{q(depot)}" "{q(name)}"' for depot, name in names)
 Path(vdf).write_text(f'''"AppBuild"
 {{
   "AppID" "{q(app)}"
   "Desc" "{q(desc)}"
-  "ContentRoot" "{q(output)}"
+  "ContentRoot" ""
   "BuildOutput" "{q(output)}"
   "SetLive" "{q(branch)}"
   "Depots"
@@ -235,7 +237,7 @@ PY
     write_config
     log="$work/steamcmd.log"
     run_steamcmd "$log" +run_app_build "$work/app_build.vdf" || true
-    if ! finished "$app_id" "$log"; then
+    if ! finished "$app_id" "$log" || grep -q "empty depot" "$log"; then
       echo "steamcmd did not publish app ${app_id} on ${branch}" >&2
       tail -n 120 "$log" >&2
       exit 1
