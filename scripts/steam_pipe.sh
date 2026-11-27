@@ -91,26 +91,28 @@ manifest_gid() {
 import re, sys
 from pathlib import Path
 depot, output, log = sys.argv[1:]
-file_gids = []
 root = Path(output)
-if root.is_dir():
-    for path in root.rglob("*.manifest"):
-        match = re.fullmatch(rf"{depot}_(\d+)", path.name.removesuffix(".manifest"))
-        if match:
-            file_gids.append(match.group(1))
+file_gids = []
+quoted = []
 text = Path(log).read_text(errors="ignore")
 if root.is_dir():
-    for path in root.rglob("*.log"):
-        text += "\n" + path.read_text(errors="ignore")
-line_gids = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        match = re.fullmatch(rf"{depot}_(\d+)", path.name.removesuffix(".manifest"))
+        if path.suffix == ".manifest" and match:
+            file_gids.append(match.group(1))
+        if path.suffix in {".vdf", ".log"} or path.name == Path(log).name:
+            text += "\n" + path.read_text(errors="ignore")
+# steamcmd writes `manifest 123…` or `"manifest" "123…"` with no extra word.
 for line in text.splitlines():
-    if depot not in line:
+    if depot not in line and "manifest" not in line.lower():
         continue
-    line_gids += re.findall(r"manifest(?:\s+id|\s+GID|:)\s+(\d{10,})", line, flags=re.I)
+    quoted += re.findall(r'manifest(?:\s*id|\s*gid)?\s*[:=]?\s*"?(\d{10,})"?', line, flags=re.I)
 if file_gids:
     print(file_gids[-1])
-elif len(set(line_gids)) == 1:
-    print(line_gids[0])
+elif len(set(quoted)) == 1:
+    print(quoted[0])
 else:
     print("")
 PY
@@ -169,9 +171,12 @@ PY
     fi
     gid="$(manifest_gid "$depot_id" "$work/output" "$log")"
     if [ -z "$gid" ]; then
-      echo "depot ${depot_id} uploaded but its manifest id was not in the steamcmd log" >&2
+      echo "depot ${depot_id} uploaded but its manifest id was not in the steamcmd output" >&2
       find "$work/output" -type f -print >&2 || true
-      tail -n 120 "$log" >&2
+      for f in "$work/output"/*; do
+        echo "===== $f =====" >&2
+        tail -n 40 "$f" >&2 || true
+      done
       exit 1
     fi
     out="${GITHUB_WORKSPACE:-.}/steam-manifest"
